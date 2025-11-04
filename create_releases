@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+
+function build_release {
+  VERSION="$1"; shift
+  dagger call build-version --version "$VERSION" export --path target
+  echo "" | gh release create "$VERSION" --target empty || true # if it exists no problem, I D E M P O T E N C Y
+  gh release upload "$VERSION" --clobber ./target/"$VERSION"/*
+}
+
+# shellcheck disable=SC2206
+versions_to_build=($*)
+
+if [ "${#versions_to_build[@]}" -eq 0 ]; then
+  gh release list --repo tesseract-ocr/tesseract --json tagName | jq .[].tagName -r > upstream_versions.txt
+  gh release list --json tagName | jq '.[].tagName' -r > released_versions.txt
+
+  # shellcheck disable=SC2207
+  versions_to_build=($(diff -w upstream_versions.txt released_versions.txt | grep -e '^< ' | sed 's;^< ;;'))
+fi
+
+# shellcheck disable=SC2145
+echo "Versions to be build: "
+for version in "${versions_to_build[@]}"; do
+  printf "\tVersion: %s\n" "$version"
+done
+
+if [[ -v DRY_RUN ]]; then
+  exit 0
+fi
+
+for version in "${versions_to_build[@]}"; do
+  build_release "$version"
+done

@@ -2,7 +2,11 @@ cmake_minimum_required(VERSION 3.25)
 project(tesseract-prebuilt LANGUAGES C CXX)
 include(ExternalProject)
 
-set(TESSERACT_VERSION "5.5.1")
+# set(TESSERACT_VERSION "5.5.1")
+if(NOT DEFINED TESSERACT_VERSION)
+  message(FATAL_ERROR "TESSERACT_VERSION precisa ser definida, ex: 5.5.1")
+endif()
+
 set(LEPTONICA_VERSION "1.86.0")
 
 set(TARGET_NAME "tesseract-${TESSERACT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
