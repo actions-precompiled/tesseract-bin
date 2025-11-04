@@ -1,35 +1,32 @@
-cmake_minimum_required(VERSION 3.16)
-project(tesseract-prebuilt)
-include(FetchContent)
+cmake_minimum_required(VERSION 3.25)
+project(tess_fullbuild LANGUAGES C CXX)
+include(ExternalProject)
 
-set(BUILD_PROG OFF CACHE BOOL "No tools")
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Static")
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(LEPT_PREFIX ${CMAKE_BINARY_DIR}/leptonica-install)
+set(TESS_PREFIX ${CMAKE_BINARY_DIR}/tesseract-install)
 
-FetchContent_Declare(
-  leptonica
+ExternalProject_Add(leptonica
   GIT_REPOSITORY https://github.com/DanBloomberg/leptonica.git
   GIT_TAG 1.86.0
+  CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release
+             -DCMAKE_INSTALL_PREFIX=${LEPT_PREFIX}
+  LOG_BUILD ON
+  LOG_OUTPUT_ON_FAILURE ON
+  USES_TERMINAL_BUILD 1
+  USES_TERMINAL_INSTALL 1
 )
-FetchContent_MakeAvailable(leptonica)
 
-# força instalação local do leptonica
-install(TARGETS leptonica DESTINATION lib)
-install(DIRECTORY ${leptonica_SOURCE_DIR}/src/ DESTINATION include FILES_MATCHING PATTERN "*.h")
-
-set(Leptonica_DIR "${leptonica_BINARY_DIR}")
-set(Leptonica_INCLUDE_DIRS "${leptonica_BINARY_DIR}/src" "${leptonica_SOURCE_DIR}/src")
-set(Leptonica_LIBRARIES leptonica)
-
-FetchContent_Declare(
-  tesseract
+ExternalProject_Add(tesseract
   GIT_REPOSITORY https://github.com/tesseract-ocr/tesseract.git
   GIT_TAG 5.5.1
+  DEPENDS leptonica
+  CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release
+             -DCMAKE_INSTALL_PREFIX=${TESS_PREFIX}
+             -DLeptonica_DIR=${LEPT_PREFIX}/lib/cmake/leptonica
+  LOG_BUILD ON
+  LOG_OUTPUT_ON_FAILURE ON
+  USES_TERMINAL_BUILD 1
+  USES_TERMINAL_INSTALL 1
 )
-FetchContent_MakeAvailable(tesseract)
 
-# força CMake do tesseract a usar o leptonica buildado
-set_target_properties(tesseract PROPERTIES
-  INTERFACE_INCLUDE_DIRECTORIES "${Leptonica_INCLUDE_DIRS}"
-)
-
+add_custom_target(install-all DEPENDS leptonica-install tesseract-install)
