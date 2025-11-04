@@ -2,7 +2,10 @@ cmake_minimum_required(VERSION 3.25)
 project(tesseract-prebuilt LANGUAGES C CXX)
 include(ExternalProject)
 
-set(STAGING_DIR ${CMAKE_BINARY_DIR}/staging)
+set(TARGET_NAME "${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+message(STATUS "Target: ${TARGET_NAME}")
+
+set(STAGING_DIR ${CMAKE_BINARY_DIR}/staging/${TARGET_NAME})
 file(MAKE_DIRECTORY ${STAGING_DIR})
 
 set(LEPT_PREFIX ${STAGING_DIR})
