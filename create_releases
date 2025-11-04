@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
 
+set -eu -o pipefail
+
+BUILD_IMAGE_VERSION=0.0.2
+
 
 function build_release {
   VERSION="$1"; shift
-  dagger call build-version --version "$VERSION" export --path target
+
+  docker run \
+    -ti \
+    -v "$PWD":/src \
+    -v "$PWD"/target/linux-amd64:/out \
+    -e TESSERACT_VERSION="$VERSION" 
+    docker pull ghcr.io/actions-precompiled/buildenv--builder-linux-amd64:$BUILD_IMAGE_VERSION
+    bash -c 'cmake -B /out -G Ninja -DTESSERACT_VERSION=5.5.0  && cmake --build /out --target package-zip'
+
   echo "" | gh release create "$VERSION" --target empty || true # if it exists no problem, I D E M P O T E N C Y
-  gh release upload "$VERSION" --clobber ./target/"$VERSION"/*
+  gh release upload "$VERSION" --clobber ./target/linux-amd64/*.zip
 }
 
 # shellcheck disable=SC2206
