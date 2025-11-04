@@ -4,20 +4,46 @@ set -eu -o pipefail
 
 BUILD_IMAGE_VERSION=0.0.2
 
+# Three supported cross-compilation targets
+TARGETS=(
+  "linux-amd64"
+  "linux-aarch64"
+  "windows-amd64"
+)
+
+function build_for_target {
+  VERSION="$1"; shift
+  TARGET="$1"; shift
+
+  echo "Building $VERSION for target: $TARGET" >&2
+
+  docker run \
+    --rm \
+    -v "$PWD":/src:ro \
+    -v "$PWD"/target/"$TARGET":/out \
+    -e TESSERACT_VERSION="$VERSION" \
+    -e BUILD_TARGET="$TARGET" \
+    ghcr.io/actions-precompiled/buildenv:$BUILD_IMAGE_VERSION \
+    bash -c 'cmake -B /out -G Ninja -DTESSERACT_VERSION="$TESSERACT_VERSION" && cmake --build /out --target package-zip'
+}
 
 function build_release {
   VERSION="$1"; shift
 
-  docker run \
-    -ti \
-    -v "$PWD":/src:ro \
-    -v "$PWD"/target/linux-amd64:/out \
-    -e TESSERACT_VERSION="$VERSION"  \
-    ghcr.io/actions-precompiled/buildenv--builder-linux-amd64:$BUILD_IMAGE_VERSION \
-    bash -c 'cmake -B /out -G Ninja -DTESSERACT_VERSION="$TESSERACT_VERSION"  && cmake --build /out --target package-zip'
+  # Build for all three targets
+  for target in "${TARGETS[@]}"; do
+    build_for_target "$VERSION" "$target"
+  done
 
-  echo "" | gh release create "$VERSION" --target empty || true # if it exists no problem, I D E M P O T E N C Y
-  gh release upload "$VERSION" --clobber ./target/linux-amd64/*.zip
+  # Create release (idempotent)
+  echo "" | gh release create "$VERSION" --target empty || true
+
+  # Upload all three target artifacts
+  for target in "${TARGETS[@]}"; do
+    if [ -d "./target/$target" ]; then
+      gh release upload "$VERSION" --clobber ./target/"$target"/*.zip
+    fi
+  done
 }
 
 # shellcheck disable=SC2206
