@@ -52,5 +52,6 @@ add_custom_target(package-zip
           ${CMAKE_BINARY_DIR}/${TARGET_NAME}.zip
           --format=zip
           ${STAGING_DIR}
+  WORKING_DIRECTORY ${STAGING_DIR}/..
   COMMENT "Packing ${STAGING_DIR} into zip"
 )
