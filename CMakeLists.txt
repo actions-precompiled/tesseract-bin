@@ -2,7 +2,10 @@ cmake_minimum_required(VERSION 3.25)
 project(tesseract-prebuilt LANGUAGES C CXX)
 include(ExternalProject)
 
-set(TARGET_NAME "${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+set(TESSERACT_VERSION "5.5.1")
+set(LEPTONICA_VERSION "1.86.0")
+
+set(TARGET_NAME "tesseract-${TESSERACT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
 message(STATUS "Target: ${TARGET_NAME}")
 
 set(STAGING_DIR ${CMAKE_BINARY_DIR}/staging/${TARGET_NAME})
@@ -14,7 +17,7 @@ set(TESS_PREFIX ${STAGING_DIR})
 ExternalProject_Add(leptonica
   PREFIX ${CMAKE_BINARY_DIR}/deps/leptonica         # build separado
   GIT_REPOSITORY https://github.com/DanBloomberg/leptonica.git
-  GIT_TAG 1.86.0
+  GIT_TAG ${LEPTONICA_VERSION}
   CMAKE_ARGS
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${LEPT_PREFIX}
@@ -26,7 +29,7 @@ ExternalProject_Add(leptonica
 ExternalProject_Add(tesseract
   PREFIX ${CMAKE_BINARY_DIR}/deps/tesseract         # build separado
   GIT_REPOSITORY https://github.com/tesseract-ocr/tesseract.git
-  GIT_TAG 5.5.1
+  GIT_TAG ${TESSERACT_VERSION}
   DEPENDS leptonica
   CMAKE_ARGS
     -DCMAKE_BUILD_TYPE=Release
@@ -39,16 +42,15 @@ ExternalProject_Add(tesseract
 )
 
 add_custom_target(stage-all
-  DEPENDS leptonica-install tesseract-install
+  DEPENDS leptonica tesseract
   COMMENT "Staging Leptonica and Tesseract builds under ${STAGING_DIR}"
 )
 
-# add_custom_target(package-tar
-#   DEPENDS stage-all
-#   COMMAND ${CMAKE_COMMAND} -E tar "cfvz"
-#           ${CMAKE_BINARY_DIR}/tesseract-prebuilt.tar.gz
-#           --format=gnutar
-#           -C ${STAGING_DIR} .
-#   COMMENT "Packing ${STAGING_DIR} into tar.gz"
-# )
-
+add_custom_target(package-zip
+  DEPENDS stage-all
+  COMMAND ${CMAKE_COMMAND} -E tar "cfv"
+          ${CMAKE_BINARY_DIR}/${TARGET_NAME}.zip
+          --format=zip
+          ${STAGING_DIR}
+  COMMENT "Packing ${STAGING_DIR} into zip"
+)
