@@ -98,6 +98,8 @@ ExternalProject_Add(libtiff
   PREFIX ${CMAKE_BINARY_DIR}/deps/libtiff
   URL https://download.osgeo.org/libtiff/tiff-${TIFF_VERSION}.tar.gz
   DEPENDS zlib libjpeg
+  # Patch to fix CMath::CMath target issue (same as vcpkg patch)
+  PATCH_COMMAND ${CMAKE_SOURCE_DIR}/patch_libtiff.sh <SOURCE_DIR>
   CMAKE_ARGS
     ${TOOLCHAIN_ARGS}
     -DCMAKE_BUILD_TYPE=Release
@@ -145,8 +147,7 @@ ExternalProject_Add(leptonica
   GIT_TAG ${LEPTONICA_VERSION}
   DEPENDS zlib libjpeg libpng libtiff libwebp
   UPDATE_COMMAND ""
-  # Patch CMakeLists.txt to fix CMath::CMath imported target issue
-  PATCH_COMMAND ${CMAKE_SOURCE_DIR}/patch_leptonica.sh <SOURCE_DIR>
+  # No patch needed - libtiff is now fixed to not export CMath::CMath
   CMAKE_ARGS
     ${TOOLCHAIN_ARGS}
     -DCMAKE_BUILD_TYPE=Release
