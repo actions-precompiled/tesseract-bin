@@ -61,15 +61,29 @@ function build_release {
 versions_to_build=($*)
 
 if [ "${#versions_to_build[@]}" -eq 0 ]; then
-  gh release list --repo tesseract-ocr/tesseract --json tagName | jq .[].tagName -r > upstream_versions.txt
-  gh release list --json tagName | jq '.[].tagName' -r > released_versions.txt
+  echo "Fetching upstream versions from tesseract-ocr/tesseract..." >&2
+  if ! gh release list --repo tesseract-ocr/tesseract --json tagName | jq -r '.[].tagName' > upstream_versions.txt; then
+    echo "Error: Failed to fetch upstream versions" >&2
+    exit 1
+  fi
+
+  echo "Fetching existing releases from this repository..." >&2
+  if ! gh release list --json tagName | jq -r '.[].tagName' > released_versions.txt; then
+    echo "Error: Failed to fetch existing releases" >&2
+    exit 1
+  fi
+
+  upstream_count=$(wc -l < upstream_versions.txt | tr -d ' ')
+  released_count=$(wc -l < released_versions.txt | tr -d ' ')
+
+  echo "Found $upstream_count upstream versions and $released_count already released" >&2
 
   # shellcheck disable=SC2207
   versions_to_build=($(diff -w upstream_versions.txt released_versions.txt | grep -e '^< ' | sed 's;^< ;;'))
 fi
 
 # shellcheck disable=SC2145
-echo "Versions to be build: "
+echo "Versions to be built: ${#versions_to_build[@]}"
 for version in "${versions_to_build[@]}"; do
   printf "\tVersion: %s\n" "$version"
 done
