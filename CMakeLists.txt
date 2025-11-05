@@ -9,7 +9,7 @@ if(NOT DEFINED TESSERACT_VERSION)
     set(TESSERACT_VERSION $ENV{TESSERACT_VERSION})
     message(STATUS "Using TESSERACT_VERSION from environment: ${TESSERACT_VERSION}")
   else()
-    message(FATAL_ERROR "TESSERACT_VERSION precisa ser definida via -DTESSERACT_VERSION=... ou variável de ambiente")
+    message(FATAL_ERROR "TESSERACT_VERSION must be defined via -DTESSERACT_VERSION=... or environment variable")
   endif()
 endif()
 
@@ -36,7 +36,7 @@ if(CMAKE_TOOLCHAIN_FILE)
 endif()
 
 ExternalProject_Add(leptonica
-  PREFIX ${CMAKE_BINARY_DIR}/deps/leptonica         # build separado
+  PREFIX ${CMAKE_BINARY_DIR}/deps/leptonica         # Separate build directory
   GIT_REPOSITORY https://github.com/DanBloomberg/leptonica.git
   GIT_TAG ${LEPTONICA_VERSION}
   CMAKE_ARGS
@@ -49,7 +49,7 @@ ExternalProject_Add(leptonica
 )
 
 ExternalProject_Add(tesseract
-  PREFIX ${CMAKE_BINARY_DIR}/deps/tesseract         # build separado
+  PREFIX ${CMAKE_BINARY_DIR}/deps/tesseract         # Separate build directory
   GIT_REPOSITORY https://github.com/tesseract-ocr/tesseract.git
   GIT_TAG ${TESSERACT_VERSION}
   DEPENDS leptonica
