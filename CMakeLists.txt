@@ -188,6 +188,8 @@ ExternalProject_Add(tesseract
     -DLeptonica_DIR=${LEPT_PREFIX}/lib/cmake/leptonica
     -DBUILD_TESTS=OFF
     -DBUILD_TRAINING_TOOLS=OFF
+    # Inject our deps file to create target aliases before find_package(Leptonica)
+    -DCMAKE_PROJECT_tesseract_INCLUDE=${CMAKE_SOURCE_DIR}/tesseract_deps.cmake
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
