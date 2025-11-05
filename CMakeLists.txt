@@ -175,6 +175,13 @@ ExternalProject_Add(leptonica
   USES_TERMINAL_INSTALL 1
 )
 
+# Post-install step: patch the installed CMake config files to remove INTERFACE_LINK_LIBRARIES
+ExternalProject_Add_Step(leptonica patch_installed_config
+  COMMAND bash -c "sed -i '/INTERFACE_LINK_LIBRARIES/d' ${LEPT_PREFIX}/lib/cmake/leptonica/*.cmake || true"
+  DEPENDEES install
+  COMMENT "Patching installed Leptonica CMake config to remove INTERFACE_LINK_LIBRARIES"
+)
+
 ExternalProject_Add(tesseract
   PREFIX ${CMAKE_BINARY_DIR}/deps/tesseract         # Separate build directory
   GIT_REPOSITORY https://github.com/tesseract-ocr/tesseract.git
