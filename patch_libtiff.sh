@@ -37,6 +37,17 @@ if [ -f "$LIBTIFF_CMAKE" ]; then
     echo "✓ Removed tif_jpeg_12.c from CMakeLists.txt"
 fi
 
+# Remove calls to _12 functions from tif_jpeg.c
+TIF_JPEG_C="$SOURCE_DIR/libtiff/tif_jpeg.c"
+if [ -f "$TIF_JPEG_C" ]; then
+    echo "Patching tif_jpeg.c to remove dual-mode function calls..."
+    # Comment out TIFFReInitJPEG_12 calls
+    sed -i 's/TIFFReInitJPEG_12/\/\/ TIFFReInitJPEG_12/g' "$TIF_JPEG_C"
+    # Comment out TIFFJPEGIsFullStripRequired_12 calls
+    sed -i 's/TIFFJPEGIsFullStripRequired_12/\/\/ TIFFJPEGIsFullStripRequired_12/g' "$TIF_JPEG_C"
+    echo "✓ Commented out dual-mode function calls in tif_jpeg.c"
+fi
+
 echo "✓ Removed all JPEG 12-bit related files"
 
 
