@@ -25,7 +25,7 @@ function build_for_target {
     -e TESSERACT_VERSION="$VERSION" \
     -e BUILD_TARGET="$TARGET" \
     ghcr.io/actions-precompiled/buildenv:$BUILDENV_VERSION \
-    bash -c 'cmake -B /out -G Ninja -DTESSERACT_VERSION="$TESSERACT_VERSION" && cmake --build /out --target package-zip'
+    bash -c 'cmake -B /out -G Ninja -DCMAKE_TOOLCHAIN_FILE=/toolchains/${BUILD_TARGET}.cmake -DTESSERACT_VERSION="$TESSERACT_VERSION" && cmake --build /out --target package-zip'
 }
 
 function build_release {

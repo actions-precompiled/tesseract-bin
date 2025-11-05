@@ -11,6 +11,8 @@ set(LEPTONICA_VERSION "1.86.0")
 
 set(TARGET_NAME "tesseract-${TESSERACT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
 message(STATUS "Target: ${TARGET_NAME}")
+message(STATUS "System: ${CMAKE_SYSTEM_NAME}")
+message(STATUS "Processor: ${CMAKE_SYSTEM_PROCESSOR}")
 
 set(STAGING_DIR ${CMAKE_BINARY_DIR}/staging/${TARGET_NAME})
 file(MAKE_DIRECTORY ${STAGING_DIR})
@@ -18,11 +20,21 @@ file(MAKE_DIRECTORY ${STAGING_DIR})
 set(LEPT_PREFIX ${STAGING_DIR})
 set(TESS_PREFIX ${STAGING_DIR})
 
+# Prepare toolchain arguments for ExternalProject
+set(TOOLCHAIN_ARGS "")
+if(CMAKE_TOOLCHAIN_FILE)
+  list(APPEND TOOLCHAIN_ARGS
+    -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
+  )
+  message(STATUS "Using toolchain: ${CMAKE_TOOLCHAIN_FILE}")
+endif()
+
 ExternalProject_Add(leptonica
   PREFIX ${CMAKE_BINARY_DIR}/deps/leptonica         # build separado
   GIT_REPOSITORY https://github.com/DanBloomberg/leptonica.git
   GIT_TAG ${LEPTONICA_VERSION}
   CMAKE_ARGS
+    ${TOOLCHAIN_ARGS}
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${LEPT_PREFIX}
     -DBUILD_PROG=OFF
@@ -36,6 +48,7 @@ ExternalProject_Add(tesseract
   GIT_TAG ${TESSERACT_VERSION}
   DEPENDS leptonica
   CMAKE_ARGS
+    ${TOOLCHAIN_ARGS}
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${TESS_PREFIX}
     -DLeptonica_DIR=${LEPT_PREFIX}/lib/cmake/leptonica
