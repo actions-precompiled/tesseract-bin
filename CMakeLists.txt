@@ -146,34 +146,29 @@ ExternalProject_Add(leptonica
   DEPENDS zlib libjpeg libpng libtiff libwebp
   UPDATE_COMMAND ""
   # Patch CMakeLists.txt before configure to fix CMath::CMath issue
-  CONFIGURE_COMMAND bash -c "sed -i 's/CMath::CMath/m/g' <SOURCE_DIR>/src/CMakeLists.txt &&
-                             ${CMAKE_COMMAND} <SOURCE_DIR>
-                             ${TOOLCHAIN_ARGS}
-                             -DCMAKE_BUILD_TYPE=Release
-                             -DCMAKE_INSTALL_PREFIX=${LEPT_PREFIX}
-                             -DCMAKE_PREFIX_PATH=${STAGING_DIR}
-                             -DCMAKE_INCLUDE_PATH=${STAGING_DIR}/include
-                             -DCMAKE_LIBRARY_PATH=${STAGING_DIR}/lib
-                             -DBUILD_PROG=OFF
-                             -DBUILD_SHARED_LIBS=OFF
-                             -DSW_BUILD=OFF
-                             -DZLIB_LIBRARY=${STAGING_DIR}/lib/libz.a
-                             -DZLIB_INCLUDE_DIR=${STAGING_DIR}/include
-                             -DPNG_LIBRARY=${STAGING_DIR}/lib/libpng.a
-                             -DPNG_PNG_INCLUDE_DIR=${STAGING_DIR}/include
-                             -DJPEG_LIBRARY=${STAGING_DIR}/lib/libjpeg.a
-                             -DJPEG_INCLUDE_DIR=${STAGING_DIR}/include
-                             -DTIFF_INCLUDE_DIR=${STAGING_DIR}/include
-                             -DTIFF_LIBRARY=${STAGING_DIR}/lib/libtiff.a
-                             -DTIFF_LIBRARIES=${STAGING_DIR}/lib/libtiff.a
-                             -DWebP_INCLUDE_DIR=${STAGING_DIR}/include
-                             -DWebP_LIBRARY=${STAGING_DIR}/lib/libwebp.a
-                             -DWebP_MUX_INCLUDE_DIR=${STAGING_DIR}/include
-                             -DWebP_DEMUX_INCLUDE_DIR=${STAGING_DIR}/include
-                             -DOPENJPEG_SUPPORT=OFF
-                             -G Ninja"
-  BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR>
-  INSTALL_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --target install
+  PATCH_COMMAND sed -i.bak "s/CMath::CMath/m/g" <SOURCE_DIR>/src/CMakeLists.txt
+  CMAKE_ARGS
+    ${TOOLCHAIN_ARGS}
+    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_INSTALL_PREFIX=${LEPT_PREFIX}
+    -DCMAKE_PREFIX_PATH=${STAGING_DIR}
+    -DCMAKE_INCLUDE_PATH=${STAGING_DIR}/include
+    -DCMAKE_LIBRARY_PATH=${STAGING_DIR}/lib
+    -DBUILD_PROG=OFF
+    -DBUILD_SHARED_LIBS=OFF
+    -DSW_BUILD=OFF
+    -DZLIB_LIBRARY=${STAGING_DIR}/lib/libz.a
+    -DZLIB_INCLUDE_DIR=${STAGING_DIR}/include
+    -DPNG_LIBRARY=${STAGING_DIR}/lib/libpng.a
+    -DPNG_PNG_INCLUDE_DIR=${STAGING_DIR}/include
+    -DJPEG_LIBRARY=${STAGING_DIR}/lib/libjpeg.a
+    -DJPEG_INCLUDE_DIR=${STAGING_DIR}/include
+    -DTIFF_INCLUDE_DIR=${STAGING_DIR}/include
+    -DWebP_INCLUDE_DIR=${STAGING_DIR}/include
+    -DWebP_LIBRARY=${STAGING_DIR}/lib/libwebp.a
+    -DWebP_MUX_INCLUDE_DIR=${STAGING_DIR}/include
+    -DWebP_DEMUX_INCLUDE_DIR=${STAGING_DIR}/include
+    -DOPENJPEG_SUPPORT=OFF
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
