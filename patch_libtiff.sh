@@ -4,7 +4,7 @@ set -ex
 SOURCE_DIR="$1"
 
 echo "========================================="
-echo "libtiff CMath Patch Script"
+echo "libtiff Patch Script"
 echo "========================================="
 echo "SOURCE_DIR: $SOURCE_DIR"
 echo "========================================="
@@ -18,6 +18,12 @@ if [ -f "$MAIN_CMAKE" ]; then
     if grep -q "find_package(CMath" "$MAIN_CMAKE"; then
         sed -i 's/find_package(CMath REQUIRED)/find_library(MATH_LIBRARY m)/g' "$MAIN_CMAKE"
         echo "✓ Replaced find_package(CMath) with find_library"
+    fi
+
+    # Disable JPEG 12-bit support
+    if grep -q "JPEG12_FOUND" "$MAIN_CMAKE"; then
+        sed -i 's/if(JPEG12_FOUND)/if(FALSE AND JPEG12_FOUND)/g' "$MAIN_CMAKE"
+        echo "✓ Disabled JPEG 12-bit support"
     fi
 fi
 

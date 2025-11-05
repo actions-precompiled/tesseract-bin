@@ -110,7 +110,6 @@ ExternalProject_Add(libtiff
     -Dtiff-tests=OFF
     -Dtiff-contrib=OFF
     -Dtiff-docs=OFF
-    -Djpeg12=OFF
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
