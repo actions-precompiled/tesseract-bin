@@ -19,12 +19,14 @@ if [ -f "$MAIN_CMAKE" ]; then
         sed -i 's/find_package(CMath REQUIRED)/find_library(MATH_LIBRARY m)/g' "$MAIN_CMAKE"
         echo "✓ Replaced find_package(CMath) with find_library"
     fi
+fi
 
-    # Disable JPEG 12-bit support (rarely used for OCR, simplifies build)
-    if grep -q "JPEG12_FOUND" "$MAIN_CMAKE"; then
-        sed -i 's/if(JPEG12_FOUND)/if(FALSE) # JPEG12_FOUND/g' "$MAIN_CMAKE"
-        echo "✓ Disabled JPEG 12-bit support"
-    fi
+# Remove JPEG 12-bit source file to prevent compilation
+JPEG12_FILE="$SOURCE_DIR/libtiff/tif_jpeg_12.c"
+if [ -f "$JPEG12_FILE" ]; then
+    echo "Removing JPEG 12-bit source file..."
+    rm -f "$JPEG12_FILE"
+    echo "✓ Removed tif_jpeg_12.c"
 fi
 
 # Patch all CMakeLists.txt files that link to CMath::CMath
