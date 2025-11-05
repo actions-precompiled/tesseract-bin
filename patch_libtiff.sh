@@ -21,11 +21,22 @@ if [ -f "$MAIN_CMAKE" ]; then
     fi
 fi
 
-# Delete JPEG 12-bit source files completely
+# Delete JPEG 12-bit source files and remove from CMakeLists.txt
 # The -Djpeg12=OFF flag doesn't seem to work properly in some versions
-echo "Removing JPEG 12-bit source files..."
+echo "Removing JPEG 12-bit support..."
+
+# Remove source files
 find "$SOURCE_DIR" -name "tif_jpeg_12.c" -delete
 find "$SOURCE_DIR" -name "*jpeg_12*" -type f -delete
+
+# Remove references from libtiff/CMakeLists.txt
+LIBTIFF_CMAKE="$SOURCE_DIR/libtiff/CMakeLists.txt"
+if [ -f "$LIBTIFF_CMAKE" ]; then
+    echo "Patching libtiff/CMakeLists.txt to remove tif_jpeg_12.c reference..."
+    sed -i '/tif_jpeg_12\.c/d' "$LIBTIFF_CMAKE"
+    echo "✓ Removed tif_jpeg_12.c from CMakeLists.txt"
+fi
+
 echo "✓ Removed all JPEG 12-bit related files"
 
 
