@@ -55,6 +55,7 @@ ExternalProject_Add(zlib
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+    -DBUILD_SHARED_LIBS=OFF
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
@@ -143,13 +144,39 @@ ExternalProject_Add(leptonica
   GIT_REPOSITORY https://github.com/DanBloomberg/leptonica.git
   GIT_TAG ${LEPTONICA_VERSION}
   DEPENDS zlib libjpeg libpng libtiff libwebp
+  # Patch to fix CMath::CMath target issue - replace alias with direct library name
+  UPDATE_COMMAND ""
+  PATCH_COMMAND sh -c "sed -i 's|CMath::CMath|m|g' <SOURCE_DIR>/src/CMakeLists.txt"
   CMAKE_ARGS
     ${TOOLCHAIN_ARGS}
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${LEPT_PREFIX}
     -DCMAKE_PREFIX_PATH=${STAGING_DIR}
+    -DCMAKE_INCLUDE_PATH=${STAGING_DIR}/include
+    -DCMAKE_LIBRARY_PATH=${STAGING_DIR}/lib
     -DBUILD_PROG=OFF
     -DBUILD_SHARED_LIBS=OFF
+    # Disable SW build which causes issues
+    -DSW_BUILD=OFF
+    # Help Leptonica find the libraries with explicit paths
+    -DZLIB_LIBRARY=${STAGING_DIR}/lib/libz.a
+    -DZLIB_INCLUDE_DIR=${STAGING_DIR}/include
+    -DPNG_LIBRARY=${STAGING_DIR}/lib/libpng.a
+    -DPNG_PNG_INCLUDE_DIR=${STAGING_DIR}/include
+    -DJPEG_LIBRARY=${STAGING_DIR}/lib/libjpeg.a
+    -DJPEG_INCLUDE_DIR=${STAGING_DIR}/include
+    # For TIFF, provide direct library paths to avoid imported target issues
+    # Use TIFF_LIBRARIES (plural) to provide full list including dependencies
+    -DTIFF_INCLUDE_DIR=${STAGING_DIR}/include
+    -DTIFF_LIBRARY=${STAGING_DIR}/lib/libtiff.a
+    -DTIFF_LIBRARIES=${STAGING_DIR}/lib/libtiff.a
+    # WebP needs multiple include dirs
+    -DWebP_INCLUDE_DIR=${STAGING_DIR}/include
+    -DWebP_LIBRARY=${STAGING_DIR}/lib/libwebp.a
+    -DWebP_MUX_INCLUDE_DIR=${STAGING_DIR}/include
+    -DWebP_DEMUX_INCLUDE_DIR=${STAGING_DIR}/include
+    # Disable optional dependencies that may cause issues
+    -DOPENJPEG_SUPPORT=OFF
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
