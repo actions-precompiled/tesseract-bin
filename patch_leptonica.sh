@@ -28,11 +28,25 @@ CONFIGURE_CMAKE="$SOURCE_DIR/cmake/Configure.cmake"
 if [ -f "$CONFIGURE_CMAKE" ]; then
     echo "Patching cmake/Configure.cmake..."
 
-    # Remove INTERFACE_LINK_LIBRARIES from export
-    # This prevents consumers from needing to find ZLIB::ZLIB, etc.
+    # Comment out the entire INTERFACE_LINK_LIBRARIES block
+    # This prevents consumers from needing to find ZLIB::ZLIB, WebP::webp, etc.
+    sed -i '/set_property.*INTERFACE_LINK_LIBRARIES/,/)/s/^/#/' "$CONFIGURE_CMAKE"
+
+    # Also remove any INTERFACE_LINK_LIBRARIES property setting
     sed -i '/INTERFACE_LINK_LIBRARIES/d' "$CONFIGURE_CMAKE"
 
     echo "✓ Removed INTERFACE_LINK_LIBRARIES export"
+fi
+
+# Patch the installed config file template if it exists
+CONFIG_IN="$SOURCE_DIR/cmake/templates/LeptonicaConfig.cmake.in"
+if [ -f "$CONFIG_IN" ]; then
+    echo "Patching LeptonicaConfig.cmake.in..."
+
+    # Remove INTERFACE_LINK_LIBRARIES from the template
+    sed -i '/INTERFACE_LINK_LIBRARIES/d' "$CONFIG_IN"
+
+    echo "✓ Removed INTERFACE_LINK_LIBRARIES from config template"
 fi
 
 echo "========================================="
