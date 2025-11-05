@@ -17,7 +17,7 @@ set(LEPTONICA_VERSION "1.86.0")
 
 # Image library versions
 set(ZLIB_VERSION "1.3.1")
-set(JPEG_VERSION "3.0.4")
+set(JPEG_VERSION "3.1.2")
 set(PNG_VERSION "1.6.44")
 set(TIFF_VERSION "4.7.0")
 set(WEBP_VERSION "1.4.0")
