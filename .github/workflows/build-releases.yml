@@ -1,0 +1,45 @@
+name: Build and Publish Releases
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+
+  # Scheduled: Every Saturday at 2 AM UTC
+  schedule:
+    - cron: '0 2 * * 6'
+
+permissions:
+  contents: write  # Required to create releases and upload assets
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up GitHub CLI authentication
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: Check for new versions to build
+        run: |
+          # Dry run to see what will be built
+          DRY_RUN=1 ./create_releases
+
+      - name: Build and publish releases
+        run: |
+          # Run without DRY_RUN or LOCAL_BUILD - creates releases and uploads
+          ./create_releases
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Release Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Workflow completed. Check releases for new artifacts." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Repository: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Triggered by: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Run: ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY

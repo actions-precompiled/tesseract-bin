@@ -68,6 +68,8 @@ target/
 
 ## Continuous Integration
 
+### PR Build Testing
+
 A GitHub Actions workflow runs on every pull request to validate that builds work correctly:
 
 - **Workflow**: `.github/workflows/pr-build-test.yml`
@@ -76,6 +78,22 @@ A GitHub Actions workflow runs on every pull request to validate that builds wor
 - **Artifacts**: Uploads build outputs as workflow artifacts (not as releases)
 
 The workflow uses `LOCAL_BUILD=1` to skip release creation and upload, ensuring PR builds don't pollute the releases.
+
+### Automated Release Publishing
+
+A scheduled workflow automatically builds and publishes new Tesseract releases:
+
+- **Workflow**: `.github/workflows/build-releases.yml`
+- **Triggers**:
+  - **Schedule**: Every Saturday at 2:00 AM UTC (automatic)
+  - **Manual**: Via workflow_dispatch in GitHub Actions UI
+- **Action**:
+  - Detects new Tesseract versions from upstream (tesseract-ocr/tesseract)
+  - Builds missing versions for all three targets
+  - Creates GitHub releases with the compiled artifacts
+- **Permissions**: Requires `contents: write` to create releases and upload assets
+
+This workflow runs the `create_releases` script without `LOCAL_BUILD`, so it creates actual releases and uploads artifacts to GitHub.
 
 ## Configuration
 
