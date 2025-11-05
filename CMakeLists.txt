@@ -60,7 +60,7 @@ ExternalProject_Add(zlib
   USES_TERMINAL_INSTALL 1
 )
 
-# 2. libjpeg-turbo - JPEG support
+# 2. libjpeg-turbo - JPEG support (8-bit)
 ExternalProject_Add(libjpeg
   PREFIX ${CMAKE_BINARY_DIR}/deps/libjpeg
   URL https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/${JPEG_VERSION}/libjpeg-turbo-${JPEG_VERSION}.tar.gz
@@ -72,6 +72,23 @@ ExternalProject_Add(libjpeg
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
     -DENABLE_SHARED=OFF
     -DENABLE_STATIC=ON
+  USES_TERMINAL_BUILD 1
+  USES_TERMINAL_INSTALL 1
+)
+
+# 2b. libjpeg-turbo 12-bit variant - for TIFF JPEG12 support
+ExternalProject_Add(libjpeg12
+  PREFIX ${CMAKE_BINARY_DIR}/deps/libjpeg12
+  URL https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/${JPEG_VERSION}/libjpeg-turbo-${JPEG_VERSION}.tar.gz
+  DEPENDS zlib
+  CMAKE_ARGS
+    ${TOOLCHAIN_ARGS}
+    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+    -DENABLE_SHARED=OFF
+    -DENABLE_STATIC=ON
+    -DWITH_12BIT=ON
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
@@ -97,8 +114,8 @@ ExternalProject_Add(libpng
 ExternalProject_Add(libtiff
   PREFIX ${CMAKE_BINARY_DIR}/deps/libtiff
   URL https://download.osgeo.org/libtiff/tiff-${TIFF_VERSION}.tar.gz
-  DEPENDS zlib libjpeg
-  # Patch to fix CMath::CMath target issue (same as vcpkg patch)
+  DEPENDS zlib libjpeg libjpeg12
+  # Patch to fix CMath::CMath target issue
   PATCH_COMMAND ${CMAKE_SOURCE_DIR}/patch_libtiff.sh <SOURCE_DIR>
   CMAKE_ARGS
     ${TOOLCHAIN_ARGS}
