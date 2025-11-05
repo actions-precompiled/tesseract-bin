@@ -131,31 +131,36 @@ The `create_releases` script supports the following environment variables:
 
 ## How It Works
 
-1. **Cross-Compilation Container**: Uses `ghcr.io/actions-precompiled/buildenv` which includes:
+### Self-Contained Binaries
+
+This project builds **fully self-contained Tesseract binaries** that don't depend on system libraries. Users can extract and run immediately without installing dependencies.
+
+### Build Process
+
+1. **Cross-Compilation Container**: Uses `ghcr.io/actions-precompiled/buildenv` which provides:
    - GCC toolchains for all platforms
    - CMake toolchain files for cross-compilation
-   - All necessary build dependencies
+   - Minimal base system (no image libraries needed)
 
-2. **CMake Build**: The `CMakeLists.txt` uses `ExternalProject_Add` to:
-   - Clone and build Leptonica
-   - Clone and build Tesseract (depends on Leptonica)
-   - Package everything into a ZIP file
+2. **CMake ExternalProject Pipeline**: Builds everything from source:
+   ```
+   zlib → libjpeg-turbo → libpng → libtiff → libwebp
+                                      ↓
+                                  Leptonica → Tesseract
+   ```
 
-3. **Toolchain Propagation**: The toolchain file is automatically passed to all ExternalProject builds, ensuring Leptonica and Tesseract are built for the correct target platform.
+   All libraries are built **statically** and linked into the final binaries:
+   - **zlib** (1.3.1) - Compression support
+   - **libjpeg-turbo** (3.0.4) - JPEG image support
+   - **libpng** (1.6.44) - PNG image support
+   - **libtiff** (4.7.0) - TIFF image support
+   - **libwebp** (1.4.0) - WebP image support
+   - **Leptonica** (1.86.0) - Image processing library
+   - **Tesseract** (user-specified) - OCR engine
 
-## Known Limitations
+3. **Toolchain Propagation**: The toolchain file is automatically passed to all ExternalProject builds, ensuring every dependency is built for the correct target platform.
 
-### Image Library Support
-
-The current buildenv container (v0.0.1) lacks image library development packages. This means Leptonica builds without support for some image formats:
-
-- ❌ TIFF support disabled (missing `libtiff-dev`)
-- ⚠️ Limited JPEG support (missing `libjpeg-dev`)
-- ⚠️ Limited PNG support (missing `libpng-dev`)
-
-Tesseract still works but with reduced image format support. See `BUILDENV_MISSING_LIBS.md` for details and proposed solutions.
-
-To track this issue, see: [actions-precompiled/buildenv#TBD]
+4. **Static Linking**: All dependencies use `BUILD_SHARED_LIBS=OFF` or equivalent, creating binaries with no external library dependencies (except libc).
 
 ## CMake Details
 
