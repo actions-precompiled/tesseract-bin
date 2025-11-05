@@ -25,8 +25,19 @@ function build_for_target {
   # This is especially important when working with mount points
   mkdir -p "$BUILD_OUTPUT_DIR/$TARGET"
 
+  # For linux-amd64 (native build), don't set BUILD_TARGET to avoid
+  # cross-compilation detection. The buildenv entrypoint will use native
+  # build mode without toolchain file, allowing try_run() tests to work.
+  #
+  # For other targets (linux-aarch64, windows-amd64), set BUILD_TARGET
+  # to enable proper cross-compilation with toolchain files.
+  local build_target_env=""
+  if [ "$TARGET" != "linux-amd64" ]; then
+    build_target_env="-e BUILD_TARGET=$TARGET"
+  fi
+
   # The buildenv entrypoint automatically:
-  # 1. Selects the correct toolchain based on BUILD_TARGET
+  # 1. Selects the correct toolchain based on BUILD_TARGET (if set)
   # 2. Configures with cmake -B /out -G Ninja
   # 3. Builds with cmake --build /out
   # 4. Packages with the package-zip target
@@ -39,7 +50,7 @@ function build_for_target {
     -v "$PWD":/src:ro \
     -v "$BUILD_OUTPUT_DIR/$TARGET":/out \
     -e TESSERACT_VERSION="$VERSION" \
-    -e BUILD_TARGET="$TARGET" \
+    $build_target_env \
     ghcr.io/actions-precompiled/buildenv:$BUILDENV_VERSION
 }
 
