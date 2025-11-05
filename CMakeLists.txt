@@ -3,8 +3,14 @@ project(tesseract-prebuilt LANGUAGES C CXX)
 include(ExternalProject)
 
 # set(TESSERACT_VERSION "5.5.1")
+# Accept TESSERACT_VERSION from environment variable or CMake -D flag
 if(NOT DEFINED TESSERACT_VERSION)
-  message(FATAL_ERROR "TESSERACT_VERSION precisa ser definida, ex: 5.5.1")
+  if(DEFINED ENV{TESSERACT_VERSION})
+    set(TESSERACT_VERSION $ENV{TESSERACT_VERSION})
+    message(STATUS "Using TESSERACT_VERSION from environment: ${TESSERACT_VERSION}")
+  else()
+    message(FATAL_ERROR "TESSERACT_VERSION precisa ser definida via -DTESSERACT_VERSION=... ou variável de ambiente")
+  endif()
 endif()
 
 set(LEPTONICA_VERSION "1.86.0")

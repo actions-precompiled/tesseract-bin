@@ -18,14 +18,18 @@ function build_for_target {
 
   echo "Building $VERSION for target: $TARGET" >&2
 
+  # The buildenv entrypoint automatically:
+  # 1. Selects the correct toolchain based on BUILD_TARGET
+  # 2. Configures with cmake -B /out -G Ninja
+  # 3. Builds with cmake --build /out
+  # 4. Packages with the package-zip target
   docker run \
     --rm \
     -v "$PWD":/src:ro \
     -v "$PWD"/target/"$TARGET":/out \
     -e TESSERACT_VERSION="$VERSION" \
     -e BUILD_TARGET="$TARGET" \
-    ghcr.io/actions-precompiled/buildenv:$BUILDENV_VERSION \
-    bash -c 'cmake -B /out -G Ninja -DCMAKE_TOOLCHAIN_FILE=/toolchains/${BUILD_TARGET}.cmake -DTESSERACT_VERSION="$TESSERACT_VERSION" && cmake --build /out --target package-zip'
+    ghcr.io/actions-precompiled/buildenv:$BUILDENV_VERSION
 }
 
 function build_release {
