@@ -183,6 +183,7 @@ ExternalProject_Add(tesseract
     ${TOOLCHAIN_ARGS}
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${TESS_PREFIX}
+    -DCMAKE_PREFIX_PATH=${STAGING_DIR}
     -DLeptonica_DIR=${LEPT_PREFIX}/lib/cmake/leptonica
     -DBUILD_TESTS=OFF
     -DBUILD_TRAINING_TOOLS=OFF
