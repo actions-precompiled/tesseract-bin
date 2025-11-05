@@ -145,8 +145,8 @@ ExternalProject_Add(leptonica
   GIT_TAG ${LEPTONICA_VERSION}
   DEPENDS zlib libjpeg libpng libtiff libwebp
   UPDATE_COMMAND ""
-  # Patch CMakeLists.txt before configure to fix CMath::CMath issue
-  PATCH_COMMAND sed -i.bak "s/CMath::CMath/m/g" <SOURCE_DIR>/src/CMakeLists.txt
+  # Patch CMakeLists.txt to fix CMath::CMath imported target issue
+  PATCH_COMMAND ${CMAKE_SOURCE_DIR}/patch_leptonica.sh <SOURCE_DIR>
   CMAKE_ARGS
     ${TOOLCHAIN_ARGS}
     -DCMAKE_BUILD_TYPE=Release
