@@ -143,6 +143,20 @@ The `create_releases` script supports the following environment variables:
 
 3. **Toolchain Propagation**: The toolchain file is automatically passed to all ExternalProject builds, ensuring Leptonica and Tesseract are built for the correct target platform.
 
+## Known Limitations
+
+### Image Library Support
+
+The current buildenv container (v0.0.1) lacks image library development packages. This means Leptonica builds without support for some image formats:
+
+- ❌ TIFF support disabled (missing `libtiff-dev`)
+- ⚠️ Limited JPEG support (missing `libjpeg-dev`)
+- ⚠️ Limited PNG support (missing `libpng-dev`)
+
+Tesseract still works but with reduced image format support. See `BUILDENV_MISSING_LIBS.md` for details and proposed solutions.
+
+To track this issue, see: [actions-precompiled/buildenv#TBD]
+
 ## CMake Details
 
 The project automatically detects the target platform from the toolchain:
