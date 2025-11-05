@@ -2,7 +2,8 @@
 
 set -eu -o pipefail
 
-BUILD_IMAGE_VERSION=0.0.2
+# Pin buildenv container version
+BUILDENV_VERSION=0.0.1
 
 # Three supported cross-compilation targets
 TARGETS=(
@@ -23,7 +24,7 @@ function build_for_target {
     -v "$PWD"/target/"$TARGET":/out \
     -e TESSERACT_VERSION="$VERSION" \
     -e BUILD_TARGET="$TARGET" \
-    ghcr.io/actions-precompiled/buildenv:$BUILD_IMAGE_VERSION \
+    ghcr.io/actions-precompiled/buildenv:$BUILDENV_VERSION \
     bash -c 'cmake -B /out -G Ninja -DTESSERACT_VERSION="$TESSERACT_VERSION" && cmake --build /out --target package-zip'
 }
 
