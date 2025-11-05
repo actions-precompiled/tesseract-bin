@@ -30,8 +30,12 @@ function build_for_target {
   # 2. Configures with cmake -B /out -G Ninja
   # 3. Builds with cmake --build /out
   # 4. Packages with the package-zip target
+  #
+  # Run as current user to avoid git "dubious ownership" errors
+  # when building on mounted volumes with different ownership
   docker run \
     --rm \
+    --user "$(id -u):$(id -g)" \
     -v "$PWD":/src:ro \
     -v "$BUILD_OUTPUT_DIR/$TARGET":/out \
     -e TESSERACT_VERSION="$VERSION" \
