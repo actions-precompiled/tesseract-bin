@@ -54,6 +54,12 @@ if(NOT TARGET webp)
     message(STATUS "  Created webp -> ${CMAKE_PREFIX_PATH}/lib/libwebp.a")
 endif()
 
+# Create WebP::webp alias (with namespace)
+if(NOT TARGET WebP::webp)
+    add_library(WebP::webp ALIAS webp)
+    message(STATUS "  Created WebP::webp alias")
+endif()
+
 if(NOT TARGET webpdecoder)
     add_library(webpdecoder UNKNOWN IMPORTED)
     set_target_properties(webpdecoder PROPERTIES
