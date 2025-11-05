@@ -4,7 +4,7 @@ set -ex
 SOURCE_DIR="$1"
 
 echo "========================================="
-echo "libtiff Patch Script"
+echo "libtiff CMath Patch Script"
 echo "========================================="
 echo "SOURCE_DIR: $SOURCE_DIR"
 echo "========================================="
@@ -19,14 +19,6 @@ if [ -f "$MAIN_CMAKE" ]; then
         sed -i 's/find_package(CMath REQUIRED)/find_library(MATH_LIBRARY m)/g' "$MAIN_CMAKE"
         echo "✓ Replaced find_package(CMath) with find_library"
     fi
-fi
-
-# Remove JPEG 12-bit source file to prevent compilation
-JPEG12_FILE="$SOURCE_DIR/libtiff/tif_jpeg_12.c"
-if [ -f "$JPEG12_FILE" ]; then
-    echo "Removing JPEG 12-bit source file..."
-    rm -f "$JPEG12_FILE"
-    echo "✓ Removed tif_jpeg_12.c"
 fi
 
 # Patch all CMakeLists.txt files that link to CMath::CMath

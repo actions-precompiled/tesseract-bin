@@ -98,7 +98,7 @@ ExternalProject_Add(libtiff
   PREFIX ${CMAKE_BINARY_DIR}/deps/libtiff
   URL https://download.osgeo.org/libtiff/tiff-${TIFF_VERSION}.tar.gz
   DEPENDS zlib libjpeg
-  # Patch to fix CMath::CMath target issue and disable JPEG 12-bit
+  # Patch to fix CMath::CMath target issue
   PATCH_COMMAND ${CMAKE_SOURCE_DIR}/patch_libtiff.sh <SOURCE_DIR>
   CMAKE_ARGS
     ${TOOLCHAIN_ARGS}
@@ -110,6 +110,7 @@ ExternalProject_Add(libtiff
     -Dtiff-tests=OFF
     -Dtiff-contrib=OFF
     -Dtiff-docs=OFF
+    -Djpeg12=OFF
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
