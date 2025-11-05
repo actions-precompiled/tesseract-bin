@@ -77,6 +77,8 @@ ExternalProject_Add(libjpeg
 )
 
 # 2b. libjpeg-turbo 12-bit variant - for TIFF JPEG12 support
+# Install to separate prefix to avoid overwriting 8-bit library
+set(JPEG12_PREFIX ${CMAKE_BINARY_DIR}/deps/libjpeg12/install)
 ExternalProject_Add(libjpeg12
   PREFIX ${CMAKE_BINARY_DIR}/deps/libjpeg12
   URL https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/${JPEG_VERSION}/libjpeg-turbo-${JPEG_VERSION}.tar.gz
@@ -84,7 +86,7 @@ ExternalProject_Add(libjpeg12
   CMAKE_ARGS
     ${TOOLCHAIN_ARGS}
     -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
+    -DCMAKE_INSTALL_PREFIX=${JPEG12_PREFIX}
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
     -DENABLE_SHARED=OFF
     -DENABLE_STATIC=ON
@@ -92,6 +94,15 @@ ExternalProject_Add(libjpeg12
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
+
+# Copy the 12-bit library to staging with correct name
+ExternalProject_Add_Step(libjpeg12 copy_to_staging
+  COMMAND ${CMAKE_COMMAND} -E copy ${JPEG12_PREFIX}/lib/libjpeg.a ${STAGING_DIR}/lib/libjpeg12.a
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${JPEG12_PREFIX}/include ${STAGING_DIR}/include/jpeg12
+  DEPENDEES install
+  COMMENT "Copying libjpeg 12-bit library to staging as libjpeg12.a"
+)
+
 
 # 3. libpng - PNG support
 ExternalProject_Add(libpng
