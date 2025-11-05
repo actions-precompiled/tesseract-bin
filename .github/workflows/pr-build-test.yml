@@ -25,9 +25,10 @@ jobs:
       - name: Build for all targets
         env:
           LOCAL_BUILD: 1
-          TESSERACT_VERSION: ${{ steps.get-version.outputs.version }}
+          VERSION: ${{ steps.get-version.outputs.version }}
         run: |
-          ./create_releases ${{ steps.get-version.outputs.version }}
+          # Use env var to prevent code injection
+          ./create_releases "$VERSION"
 
       - name: Upload linux-amd64 artifact
         uses: actions/upload-artifact@v4
