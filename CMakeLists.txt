@@ -175,11 +175,11 @@ ExternalProject_Add(leptonica
   USES_TERMINAL_INSTALL 1
 )
 
-# Post-install step: patch the installed CMake config files to remove INTERFACE_LINK_LIBRARIES
+# Post-install step: patch the installed CMake config files to use absolute library paths
 ExternalProject_Add_Step(leptonica patch_installed_config
-  COMMAND bash -c "sed -i '/INTERFACE_LINK_LIBRARIES/d' ${LEPT_PREFIX}/lib/cmake/leptonica/*.cmake || true"
+  COMMAND bash -c "sed -i 's|INTERFACE_LINK_LIBRARIES \"[^\"]*\"|INTERFACE_LINK_LIBRARIES \"${STAGING_DIR}/lib/libpng.a\;${STAGING_DIR}/lib/libjpeg.a\;${STAGING_DIR}/lib/libtiff.a\;${STAGING_DIR}/lib/libwebp.a\;${STAGING_DIR}/lib/libz.a\;m\"|g' ${LEPT_PREFIX}/lib/cmake/leptonica/LeptonicaTargets.cmake || true"
   DEPENDEES install
-  COMMENT "Patching installed Leptonica CMake config to remove INTERFACE_LINK_LIBRARIES"
+  COMMENT "Patching Leptonica CMake config to use absolute library paths"
 )
 
 ExternalProject_Add(tesseract
