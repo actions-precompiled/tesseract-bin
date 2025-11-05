@@ -21,34 +21,15 @@ if [ -f "$MAIN_CMAKE" ]; then
     fi
 fi
 
-# Delete JPEG 12-bit source files and remove from CMakeLists.txt
-# The -Djpeg12=OFF flag doesn't seem to work properly in some versions
-echo "Removing JPEG 12-bit support..."
-
-# Remove source files
-find "$SOURCE_DIR" -name "tif_jpeg_12.c" -delete
-find "$SOURCE_DIR" -name "*jpeg_12*" -type f -delete
-
-# Remove references from libtiff/CMakeLists.txt
-LIBTIFF_CMAKE="$SOURCE_DIR/libtiff/CMakeLists.txt"
-if [ -f "$LIBTIFF_CMAKE" ]; then
-    echo "Patching libtiff/CMakeLists.txt to remove tif_jpeg_12.c reference..."
-    sed -i '/tif_jpeg_12\.c/d' "$LIBTIFF_CMAKE"
-    echo "✓ Removed tif_jpeg_12.c from CMakeLists.txt"
+# Disable JPEG 12-bit dual-mode support by patching the JPEG codec detection
+JPEG_CODEC_CMAKE="$SOURCE_DIR/cmake/JPEGCodec.cmake"
+if [ -f "$JPEG_CODEC_CMAKE" ]; then
+    echo "Patching cmake/JPEGCodec.cmake to disable dual-mode..."
+    # Force HAVE_JPEGTURBO_DUAL_MODE_8_12 to be undefined
+    sed -i 's/set(HAVE_JPEGTURBO_DUAL_MODE_8_12 1)/set(HAVE_JPEGTURBO_DUAL_MODE_8_12 0)/g' "$JPEG_CODEC_CMAKE"
+    sed -i 's/if.*JPEGTURBO_DUAL_MODE_8_12/if(FALSE) # JPEGTURBO_DUAL_MODE_8_12/g' "$JPEG_CODEC_CMAKE"
+    echo "✓ Disabled JPEG dual-mode detection"
 fi
-
-# Remove calls to _12 functions from tif_jpeg.c
-TIF_JPEG_C="$SOURCE_DIR/libtiff/tif_jpeg.c"
-if [ -f "$TIF_JPEG_C" ]; then
-    echo "Patching tif_jpeg.c to remove dual-mode function calls..."
-    # Comment out TIFFReInitJPEG_12 calls
-    sed -i 's/TIFFReInitJPEG_12/\/\/ TIFFReInitJPEG_12/g' "$TIF_JPEG_C"
-    # Comment out TIFFJPEGIsFullStripRequired_12 calls
-    sed -i 's/TIFFJPEGIsFullStripRequired_12/\/\/ TIFFJPEGIsFullStripRequired_12/g' "$TIF_JPEG_C"
-    echo "✓ Commented out dual-mode function calls in tif_jpeg.c"
-fi
-
-echo "✓ Removed all JPEG 12-bit related files"
 
 
 # Patch all CMakeLists.txt files that link to CMath::CMath
