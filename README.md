@@ -55,7 +55,7 @@ For each version, the script:
 
 ### Output Structure
 
-Build artifacts are placed in:
+Build artifacts are placed in `target/` by default (or `$BUILD_OUTPUT_DIR` if set):
 ```
 target/
 ├── linux-amd64/
@@ -65,6 +65,8 @@ target/
 └── windows-amd64/
     └── tesseract-5.5.1-Windows-AMD64.zip
 ```
+
+**Note:** The script automatically creates target directories before running Docker to avoid permission issues with mount points.
 
 ## Continuous Integration
 
@@ -123,6 +125,9 @@ The `create_releases` script supports the following environment variables:
 - **`LOCAL_BUILD`**: If set, builds locally without creating GitHub releases or uploading artifacts
   - Useful for testing builds locally
   - Used automatically by the PR build workflow
+- **`BUILD_OUTPUT_DIR`**: Override the build output directory (default: `$PWD/target`)
+  - Useful when working with mount points that have permission restrictions
+  - Example: `BUILD_OUTPUT_DIR=/tmp/tesseract-builds ./create_releases 5.5.1`
 
 ## How It Works
 

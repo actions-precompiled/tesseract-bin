@@ -12,11 +12,18 @@ TARGETS=(
   "windows-amd64"
 )
 
+# Allow overriding build output directory (useful for mount point issues)
+BUILD_OUTPUT_DIR="${BUILD_OUTPUT_DIR:-$PWD/target}"
+
 function build_for_target {
   VERSION="$1"; shift
   TARGET="$1"; shift
 
   echo "Building $VERSION for target: $TARGET" >&2
+
+  # Create target directory before docker run to avoid permission issues
+  # This is especially important when working with mount points
+  mkdir -p "$BUILD_OUTPUT_DIR/$TARGET"
 
   # The buildenv entrypoint automatically:
   # 1. Selects the correct toolchain based on BUILD_TARGET
@@ -26,7 +33,7 @@ function build_for_target {
   docker run \
     --rm \
     -v "$PWD":/src:ro \
-    -v "$PWD"/target/"$TARGET":/out \
+    -v "$BUILD_OUTPUT_DIR/$TARGET":/out \
     -e TESSERACT_VERSION="$VERSION" \
     -e BUILD_TARGET="$TARGET" \
     ghcr.io/actions-precompiled/buildenv:$BUILDENV_VERSION
@@ -51,8 +58,8 @@ function build_release {
 
   # Upload all three target artifacts
   for target in "${TARGETS[@]}"; do
-    if [ -d "./target/$target" ]; then
-      gh release upload "$VERSION" --clobber ./target/"$target"/*.zip
+    if [ -d "$BUILD_OUTPUT_DIR/$target" ]; then
+      gh release upload "$VERSION" --clobber "$BUILD_OUTPUT_DIR/$target"/*.zip
     fi
   done
 }
