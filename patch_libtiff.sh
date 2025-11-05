@@ -4,7 +4,7 @@ set -ex
 SOURCE_DIR="$1"
 
 echo "========================================="
-echo "libtiff CMath Patch Script"
+echo "libtiff Patch Script"
 echo "========================================="
 echo "SOURCE_DIR: $SOURCE_DIR"
 echo "========================================="
@@ -20,6 +20,14 @@ if [ -f "$MAIN_CMAKE" ]; then
         echo "✓ Replaced find_package(CMath) with find_library"
     fi
 fi
+
+# Delete JPEG 12-bit source files completely
+# The -Djpeg12=OFF flag doesn't seem to work properly in some versions
+echo "Removing JPEG 12-bit source files..."
+find "$SOURCE_DIR" -name "tif_jpeg_12.c" -delete
+find "$SOURCE_DIR" -name "*jpeg_12*" -type f -delete
+echo "✓ Removed all JPEG 12-bit related files"
+
 
 # Patch all CMakeLists.txt files that link to CMath::CMath
 echo "Patching target_link_libraries calls..."
