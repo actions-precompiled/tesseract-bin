@@ -36,6 +36,12 @@ function build_release {
     build_for_target "$VERSION" "$target"
   done
 
+  # Skip release creation and upload if LOCAL_BUILD is set
+  if [[ -v LOCAL_BUILD ]]; then
+    echo "LOCAL_BUILD is set, skipping release creation and upload" >&2
+    return 0
+  fi
+
   # Create release (idempotent)
   echo "" | gh release create "$VERSION" --target empty || true
 

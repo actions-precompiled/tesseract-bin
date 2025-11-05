@@ -41,6 +41,11 @@ The `create_releases` script builds Tesseract binaries for all supported platfor
 DRY_RUN=1 ./create_releases
 ```
 
+**Local build (build without creating releases or uploading):**
+```bash
+LOCAL_BUILD=1 ./create_releases 5.5.1
+```
+
 ### Build Process
 
 For each version, the script:
@@ -61,6 +66,17 @@ target/
     └── tesseract-5.5.1-Windows-AMD64.zip
 ```
 
+## Continuous Integration
+
+A GitHub Actions workflow runs on every pull request to validate that builds work correctly:
+
+- **Workflow**: `.github/workflows/pr-build-test.yml`
+- **Trigger**: Pull requests to main/master
+- **Action**: Builds the latest Tesseract version for all three targets
+- **Artifacts**: Uploads build outputs as workflow artifacts (not as releases)
+
+The workflow uses `LOCAL_BUILD=1` to skip release creation and upload, ensuring PR builds don't pollute the releases.
+
 ## Configuration
 
 ### Container Version
@@ -80,6 +96,15 @@ Leptonica version is configured in `CMakeLists.txt`:
 ```cmake
 set(LEPTONICA_VERSION "1.86.0")
 ```
+
+### Environment Variables
+
+The `create_releases` script supports the following environment variables:
+
+- **`DRY_RUN`**: If set, lists versions that would be built without actually building
+- **`LOCAL_BUILD`**: If set, builds locally without creating GitHub releases or uploading artifacts
+  - Useful for testing builds locally
+  - Used automatically by the PR build workflow
 
 ## How It Works
 
