@@ -147,7 +147,8 @@ ExternalProject_Add(leptonica
   GIT_TAG ${LEPTONICA_VERSION}
   DEPENDS zlib libjpeg libpng libtiff libwebp
   UPDATE_COMMAND ""
-  # No patch needed - libtiff is now fixed to not export CMath::CMath
+  # Patch to use PRIVATE linkage and not export imported targets
+  PATCH_COMMAND ${CMAKE_SOURCE_DIR}/patch_leptonica.sh <SOURCE_DIR>
   CMAKE_ARGS
     ${TOOLCHAIN_ARGS}
     -DCMAKE_BUILD_TYPE=Release
