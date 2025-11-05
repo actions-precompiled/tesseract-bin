@@ -78,19 +78,8 @@ if [ "${#versions_to_build[@]}" -eq 0 ]; then
 
   echo "Found $upstream_count upstream versions and $released_count already released" >&2
 
-  # Debug: show first few versions from each file
-  if [ "$upstream_count" -gt 0 ]; then
-    echo "Sample upstream versions:" >&2
-    head -3 upstream_versions.txt | sed 's/^/  /' >&2
-  fi
-  if [ "$released_count" -gt 0 ]; then
-    echo "Sample released versions:" >&2
-    head -3 released_versions.txt | sed 's/^/  /' >&2
-  fi
-
   # Find versions that are in upstream but not in released
-  # Using comm instead of diff for more reliable results
-  # comm requires sorted input
+  # Using comm for reliable comparison (requires sorted input)
   sort upstream_versions.txt > upstream_sorted.txt
   sort released_versions.txt > released_sorted.txt
 
@@ -101,16 +90,14 @@ if [ "${#versions_to_build[@]}" -eq 0 ]; then
   rm -f upstream_sorted.txt released_sorted.txt
 fi
 
-echo "" >&2
-echo "=== Versions to be built: ${#versions_to_build[@]} ===" >&2
 if [ "${#versions_to_build[@]}" -eq 0 ]; then
   echo "No new versions to build!" >&2
 else
+  echo "Versions to be built: ${#versions_to_build[@]}" >&2
   for version in "${versions_to_build[@]}"; do
     echo "  - $version" >&2
   done
 fi
-echo "" >&2
 
 if [[ -v DRY_RUN ]]; then
   exit 0
