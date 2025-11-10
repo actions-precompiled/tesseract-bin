@@ -1,19 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
 project(tesseract-prebuilt LANGUAGES C CXX)
+include(FetchContent)
 include(ExternalProject)
 
-set(STAGING_DIR "${CMAKE_BINARY_DIR}/staging/${TARGET_NAME}")
-file(MAKE_DIRECTORY "${STAGING_DIR}")
-
-set(CMAKE_SYSROOT ${STAGING_DIR})
-
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SYSROOT}/cmake")
-set(CMAKE_PREFIX_PATH ${CMAKE_SYSROOT})
-
-find_package(CMath)
-
-# set(TESSERACT_VERSION "5.5.1")
 # Accept TESSERACT_VERSION from environment variable or CMake -D flag
 if(NOT DEFINED TESSERACT_VERSION)
   if(DEFINED ENV{TESSERACT_VERSION})
@@ -24,7 +13,6 @@ if(NOT DEFINED TESSERACT_VERSION)
   endif()
 endif()
 
-
 # Image library versions
 set(LEPTONICA_VERSION "1.86.0")
 set(ZLIB_VERSION "1.3.1")
@@ -33,181 +21,101 @@ set(PNG_VERSION "1.6.44")
 set(TIFF_VERSION "4.7.0")
 set(WEBP_VERSION "1.4.0")
 
-# set(CMAKE_PREFIX_PATH ${STAGING_DIR})
+set(CMAKE_PREFIX_PATH ${STAGING_DIR} ${CMAKE_PREFIX_PATH})
+set(ZLIB_LIBRARY "${STAGING_DIR}/lib/libzlibstatic.a")
+set(ZLIB_INCLUDE_DIR "${STAGING_DIR}/include")
+set(Leptonica_DIR "${STAGING_DIR}")
+
 set(TARGET_NAME "tesseract-${TESSERACT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
 message(STATUS "Target: ${TARGET_NAME}")
 message(STATUS "System: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "Processor: ${CMAKE_SYSTEM_PROCESSOR}")
 
+# Global settings
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_BUILD_TYPE Release)
+set(FETCHCONTENT_QUIET OFF)
 
-set(LEPT_PREFIX ${STAGING_DIR})
-set(TESS_PREFIX ${STAGING_DIR})
+# Add CMath module
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-# Prepare toolchain arguments for ExternalProject
-set(TOOLCHAIN_ARGS "")
-if(CMAKE_TOOLCHAIN_FILE)
-  list(APPEND TOOLCHAIN_ARGS
-    -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
-
-  )
-  message(STATUS "Using toolchain: ${CMAKE_TOOLCHAIN_FILE}")
-endif()
-list(APPEND TOOLCHAIN_ARGS
-    -DCMAKE_SYSROOT=${STAGING_DIR}
-    -DBUILD_SHARED_LIBS=OFF
-    -DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH}:${CMAKE_CURRENT_SOURCE_DIR}/cmake
-    -DSW_BUILD=OFF
-)
-
+# Install prefix
+set(STAGING_DIR "${CMAKE_BINARY_DIR}/staging/${TARGET_NAME}")
+set(CMAKE_INSTALL_PREFIX ${STAGING_DIR})
 
 # ============================================================================
-# Image Libraries - Build dependencies from source for self-contained binaries
+# Image Libraries
 # ============================================================================
 
-# 1. zlib - Compression library (base dependency)
-ExternalProject_Add(zlib
-  PREFIX ${CMAKE_BINARY_DIR}/deps/zlib
+# 1. zlib
+FetchContent_Declare(zlib
   URL https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.gz
-  CMAKE_ARGS
-    ${TOOLCHAIN_ARGS}
-    -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
-    -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-    -DBUILD_SHARED_LIBS=OFF
-  CMAKE_CACHE_ARGS
-    ${COMMON_CACHE_ARGS}
-  USES_TERMINAL_BUILD 1
-  USES_TERMINAL_INSTALL 1
 )
 
+# 2. libjpeg-turbo
+# libjpeg como ExternalProject
 ExternalProject_Add(libjpeg
+  DEPENDENCIES zlib
   PREFIX ${CMAKE_BINARY_DIR}/deps/libjpeg
   URL https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/${JPEG_VERSION}/libjpeg-turbo-${JPEG_VERSION}.tar.gz
-  DEPENDS zlib
   CMAKE_ARGS
-    ${TOOLCHAIN_ARGS}
-    -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
-    -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-  CMAKE_CACHE_ARGS
-    ${COMMON_CACHE_ARGS}
-  USES_TERMINAL_BUILD 1
-  USES_TERMINAL_INSTALL 1
-)
-
-# 3. libpng - PNG support
-ExternalProject_Add(libpng
-  PREFIX ${CMAKE_BINARY_DIR}/deps/libpng
-  URL https://downloads.sourceforge.net/libpng/libpng-${PNG_VERSION}.tar.gz
-  DEPENDS zlib
-  CMAKE_ARGS
-    ${TOOLCHAIN_ARGS}
     -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
-    -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-    -DPNG_TESTS=OFF
-  CMAKE_CACHE_ARGS
-    ${COMMON_CACHE_ARGS}
-  USES_TERMINAL_BUILD 1
-  USES_TERMINAL_INSTALL 1
-)
-
-# 4. libtiff - TIFF support
-ExternalProject_Add(libtiff
-  PREFIX ${CMAKE_BINARY_DIR}/deps/libtiff
-  URL https://download.osgeo.org/libtiff/tiff-${TIFF_VERSION}.tar.gz
-  DEPENDS zlib libjpeg
-  CMAKE_ARGS
-    ${TOOLCHAIN_ARGS}
-    -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
-    -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-    -DCMAKE_MODULE_PATH=${CMAKE_SOURCE_DIR}/cmake
-    -Dtiff-docs=OFF
-    -Dtiff-tests=OFF
     -DBUILD_SHARED_LIBS=OFF
-    -DCMAKE_C_STANDARD_LIBRARIES=-lm
-  CMAKE_CACHE_ARGS
-    ${COMMON_CACHE_ARGS}
-  USES_TERMINAL_BUILD 1
-  USES_TERMINAL_INSTALL 1
+    -DZLIB_LIBRARY=${STAGING_DIR}/lib/libzlibstatic.a
+    -DZLIB_INCLUDE_DIR=${STAGING_DIR}/include
 )
 
-# 5. libwebp - WebP support
-ExternalProject_Add(libwebp
-  PREFIX ${CMAKE_BINARY_DIR}/deps/libwebp
+# 3. libpng
+set(PNG_TESTS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(libpng
+  URL https://downloads.sourceforge.net/libpng/libpng-${PNG_VERSION}.tar.gz
+)
+
+# 4. libtiff
+set(tiff-docs OFF CACHE BOOL "" FORCE)
+set(tiff-tests OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(libtiff
+  URL https://download.osgeo.org/libtiff/tiff-${TIFF_VERSION}.tar.gz
+)
+
+# 5. libwebp
+set(WEBP_BUILD_SHARPYUV ON CACHE BOOL "" FORCE)
+FetchContent_Declare(libwebp
   URL https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-${WEBP_VERSION}.tar.gz
-  DEPENDS zlib libjpeg libpng libtiff
-  CMAKE_ARGS
-    ${TOOLCHAIN_ARGS}
-    -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
-    -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-    -DWEBP_BUILD_SHARPYUV=ON
-  CMAKE_CACHE_ARGS
-    ${COMMON_CACHE_ARGS}
-  USES_TERMINAL_BUILD 1
-  USES_TERMINAL_INSTALL 1
 )
 
-# ============================================================================
-# Leptonica & Tesseract
-# ============================================================================
-
-ExternalProject_Add(leptonica
-  PREFIX ${CMAKE_BINARY_DIR}/deps/leptonica
-    URL https://github.com/DanBloomberg/leptonica/archive/refs/tags/${LEPTONICA_VERSION}.tar.gz
-  DEPENDS zlib libjpeg libpng libtiff libwebp
-  UPDATE_COMMAND ""
-  CMAKE_ARGS
-    ${TOOLCHAIN_ARGS}
-    -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_INSTALL_PREFIX=${LEPT_PREFIX}
-    -DCMAKE_PREFIX_PATH=${STAGING_DIR}
-    -DCMAKE_MODULE_PATH=${CMAKE_SOURCE_DIR}/cmake
-    -DBUILD_PROG=OFF
-    -DSW_BUILD=OFF
-  CMAKE_CACHE_ARGS
-    ${COMMON_CACHE_ARGS}
-  USES_TERMINAL_BUILD 1
-  USES_TERMINAL_INSTALL 1
+# 6. leptonica
+set(BUILD_PROG OFF CACHE BOOL "" FORCE)
+set(SW_BUILD OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(leptonica
+  URL https://github.com/DanBloomberg/leptonica/archive/refs/tags/${LEPTONICA_VERSION}.tar.gz
 )
 
-ExternalProject_Add_Step(leptonica fix_cmake_config
-    COMMAND ${CMAKE_SOURCE_DIR}/fix_leptonica_targets.sh ${STAGING_DIR}
-    DEPENDEES install
-)
-
-ExternalProject_Add(tesseract
-  PREFIX ${CMAKE_BINARY_DIR}/deps/tesseract         # Separate build directory
+# 7. tesseract
+set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_TRAINING_TOOLS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(tesseract
   URL https://github.com/tesseract-ocr/tesseract/archive/refs/tags/${TESSERACT_VERSION}.tar.gz
-  DEPENDS leptonica
-  CMAKE_ARGS
-    ${TOOLCHAIN_ARGS}
-    -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_INSTALL_PREFIX=${TESS_PREFIX}
-    -DLeptonica_DIR=${LEPT_PREFIX}/lib/cmake/leptonica
-    -DBUILD_TESTS=OFF
-    -DBUILD_TRAINING_TOOLS=OFF
-    -DCMAKE_FIND_ROOT_PATH=${STAGING_DIR}  # Para cross-compile
-    -DLEPT_TIFF_RESULT=0
-  CMAKE_CACHE_ARGS
-    ${COMMON_CACHE_ARGS}
-  USES_TERMINAL_BUILD 1
-  USES_TERMINAL_INSTALL 1
 )
 
-add_custom_target(stage-all
-  DEPENDS zlib libjpeg libpng libtiff libwebp leptonica tesseract
-  COMMENT "Staging all dependencies under ${STAGING_DIR}"
-)
+# Download and make available
+FetchContent_MakeAvailable(zlib libpng libtiff libwebp leptonica tesseract)
 
+# ============================================================================
+# Installation
+# ============================================================================
+
+install(TARGETS tesseract DESTINATION bin)
+install(DIRECTORY ${CMAKE_BINARY_DIR}/_deps/tesseract-src/tessdata 
+        DESTINATION share/tessdata
+        OPTIONAL)
+
+# Package target
 add_custom_target(package-zip
-  DEPENDS stage-all
-  COMMAND ${CMAKE_COMMAND} -E tar "cfv"
-          ${CMAKE_BINARY_DIR}/${TARGET_NAME}.zip
-          --format=zip
-          ${STAGING_DIR}
-  WORKING_DIRECTORY ${STAGING_DIR}/..
+  COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --prefix ${STAGING_DIR}
+  COMMAND ${CMAKE_COMMAND} -E tar "cfv" ${CMAKE_BINARY_DIR}/${TARGET_NAME}.zip --format=zip ${STAGING_DIR}
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   COMMENT "Packing ${STAGING_DIR} into zip"
 )
