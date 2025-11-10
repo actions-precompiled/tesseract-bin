@@ -48,10 +48,16 @@ if(CMAKE_TOOLCHAIN_FILE)
   )
   message(STATUS "Using toolchain: ${CMAKE_TOOLCHAIN_FILE}")
 endif()
+
 set(CMAKE_FIND_ROOT_PATH ${STAGING_DIR})
 set(CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH OFF)
 set(CMAKE_FIND_USE_CMAKE_PATH OFF)
 set(CMAKE_FIND_USE_CMAKE_SYSTEM_PATH OFF)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -L/usr/x86_64-w64-mingw32/lib")
+endif()
+
 
 
 # ============================================================================
@@ -67,13 +73,20 @@ ExternalProject_Add(zlib
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-    -DZLIB_LIBRARY=z
     -DBUILD_SHARED_LIBS=OFF
   CMAKE_CACHE_ARGS
     ${COMMON_CACHE_ARGS}
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
+
+add_custom_command(
+  TARGET zlib POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy
+          ${STAGING_DIR}/lib/libzlibstatic.a
+          ${STAGING_DIR}/lib/libz.a
+)
+
 
 ExternalProject_Add(libjpeg
   PREFIX ${CMAKE_BINARY_DIR}/deps/libjpeg
@@ -152,8 +165,7 @@ ExternalProject_Add(libwebp
 
 ExternalProject_Add(leptonica
   PREFIX ${CMAKE_BINARY_DIR}/deps/leptonica
-  GIT_REPOSITORY https://github.com/DanBloomberg/leptonica.git
-  GIT_TAG ${LEPTONICA_VERSION}
+    URL https://github.com/DanBloomberg/leptonica/archive/refs/tags/${LEPTONICA_VERSION}.tar.gz
   DEPENDS zlib libjpeg libpng libtiff libwebp
   UPDATE_COMMAND ""
   CMAKE_ARGS
@@ -178,8 +190,7 @@ ExternalProject_Add_Step(leptonica fix_cmake_config
 
 ExternalProject_Add(tesseract
   PREFIX ${CMAKE_BINARY_DIR}/deps/tesseract         # Separate build directory
-  GIT_REPOSITORY https://github.com/tesseract-ocr/tesseract.git
-  GIT_TAG ${TESSERACT_VERSION}
+  URL https://github.com/tesseract-ocr/tesseract/archive/refs/tags/${TESSERACT_VERSION}.tar.gz
   DEPENDS leptonica
   CMAKE_ARGS
     ${TOOLCHAIN_ARGS}
