@@ -11,9 +11,9 @@ mkdir -p "$CCACHE_DIR"
 
 # Three supported cross-compilation targets
 TARGETS=(
+  "windows-amd64"
   "linux-amd64"
   "linux-aarch64"
-  "windows-amd64"
 )
 
 # Allow overriding build output directory (useful for mount point issues)
