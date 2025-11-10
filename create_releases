@@ -3,7 +3,7 @@
 set -eu -o pipefail
 
 # Pin buildenv container version
-BUILDENV_VERSION=0.0.8
+BUILDENV_VERSION=0.0.9
 
 # ccache directory for shared compilation cache across builds
 CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}"
@@ -46,6 +46,8 @@ function build_for_target {
     -v "$CCACHE_DIR":/ccache \
     -e TESSERACT_VERSION="$VERSION" \
     -e CCACHE_DIR=/ccache \
+    -e CMAKE_C_COMPILER_LAUNCHER=ccache \
+    -e CMAKE_CXX_COMPILER_LAUNCHER=ccache \
     -e BUILD_TARGET="$TARGET" \
     ghcr.io/actions-precompiled/buildenv:$BUILDENV_VERSION
 }
