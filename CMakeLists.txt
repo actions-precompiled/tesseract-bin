@@ -92,7 +92,6 @@ ExternalProject_Add(libtiff
   PREFIX ${CMAKE_BINARY_DIR}/deps/libtiff
   URL https://download.osgeo.org/libtiff/tiff-${TIFF_VERSION}.tar.gz
   DEPENDS zlib libjpeg
-  # Patch to fix CMath::CMath target issue
   CMAKE_ARGS
     ${TOOLCHAIN_ARGS}
     -DCMAKE_BUILD_TYPE=Release
@@ -129,7 +128,6 @@ ExternalProject_Add(leptonica
   GIT_TAG ${LEPTONICA_VERSION}
   DEPENDS zlib libjpeg libpng libtiff libwebp
   UPDATE_COMMAND ""
-  # Patch to use PRIVATE linkage and not export imported targets
   CMAKE_ARGS
     ${TOOLCHAIN_ARGS}
     -DCMAKE_BUILD_TYPE=Release
@@ -143,11 +141,9 @@ ExternalProject_Add(leptonica
   USES_TERMINAL_INSTALL 1
 )
 
-# Post-install step: patch the installed CMake config files to use absolute library paths
-ExternalProject_Add_Step(leptonica patch_installed_config
-  COMMAND ${CMAKE_SOURCE_DIR}/patch_leptonica_config.sh ${LEPT_PREFIX} ${STAGING_DIR}
-  DEPENDEES install
-  COMMENT "Patching Leptonica CMake config to use absolute library paths"
+ExternalProject_Add_Step(leptonica fix_cmake_config
+    COMMAND bash -c "sed -i 's|INTERFACE_LINK_LIBRARIES \".*\"|INTERFACE_LINK_LIBRARIES \"${STAGING_DIR}/lib/libtiff.a\\;${STAGING_DIR}/lib/libjpeg.a\\;${STAGING_DIR}/lib/libwebp.a\\;${STAGING_DIR}/lib/libpng.a\\;${STAGING_DIR}/lib/libz.a\\;m\\;pthread\"|' ${STAGING_DIR}/lib/cmake/leptonica/LeptonicaTargets.cmake"
+    DEPENDEES install
 )
 
 ExternalProject_Add(tesseract
@@ -163,8 +159,10 @@ ExternalProject_Add(tesseract
     -DLeptonica_DIR=${LEPT_PREFIX}/lib/cmake/leptonica
     -DBUILD_TESTS=OFF
     -DBUILD_TRAINING_TOOLS=OFF
-    # Inject our deps file to create target aliases before find_package(Leptonica)
-    -DCMAKE_PROJECT_tesseract_INCLUDE=${CMAKE_SOURCE_DIR}/tesseract_deps.cmake
+    -DPKG_CONFIG_PATH=${STAGING_DIR}/lib/pkgconfig
+    -DLeptonica_DIR=${STAGING_DIR}/lib/cmake/leptonica
+    -DCMAKE_PREFIX_PATH=${STAGING_DIR}
+    -DCMAKE_FIND_ROOT_PATH=${STAGING_DIR}  # Para cross-compile
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
