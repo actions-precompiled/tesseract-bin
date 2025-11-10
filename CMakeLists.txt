@@ -13,9 +13,9 @@ if(NOT DEFINED TESSERACT_VERSION)
   endif()
 endif()
 
-set(LEPTONICA_VERSION "1.86.0")
 
 # Image library versions
+set(LEPTONICA_VERSION "1.86.0")
 set(ZLIB_VERSION "1.3.1")
 set(JPEG_VERSION "3.1.2")
 set(PNG_VERSION "1.6.44")
@@ -97,9 +97,11 @@ ExternalProject_Add(libtiff
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+    -DCMAKE_MODULE_PATH=${CMAKE_SOURCE_DIR}/cmake
     -Dtiff-docs=OFF
     -Dtiff-tests=OFF
-    -Dtif-static=OFF
+    -DBUILD_SHARED_LIBS=OFF
+    -DCMAKE_C_STANDARD_LIBRARIES=-lm
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
@@ -114,6 +116,7 @@ ExternalProject_Add(libwebp
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+    -DWEBP_BUILD_SHARPYUV=ON
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
@@ -133,8 +136,7 @@ ExternalProject_Add(leptonica
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${LEPT_PREFIX}
     -DCMAKE_PREFIX_PATH=${STAGING_DIR}
-    -DCMAKE_INCLUDE_PATH=${STAGING_DIR}/include
-    -DCMAKE_LIBRARY_PATH=${STAGING_DIR}/lib
+    -DCMAKE_MODULE_PATH=${CMAKE_SOURCE_DIR}/cmake
     -DBUILD_PROG=OFF
     -DSW_BUILD=OFF
   USES_TERMINAL_BUILD 1
@@ -142,9 +144,10 @@ ExternalProject_Add(leptonica
 )
 
 ExternalProject_Add_Step(leptonica fix_cmake_config
-    COMMAND bash -c "sed -i 's|INTERFACE_LINK_LIBRARIES \".*\"|INTERFACE_LINK_LIBRARIES \"${STAGING_DIR}/lib/libtiff.a\\;${STAGING_DIR}/lib/libjpeg.a\\;${STAGING_DIR}/lib/libwebp.a\\;${STAGING_DIR}/lib/libpng.a\\;${STAGING_DIR}/lib/libz.a\\;m\\;pthread\"|' ${STAGING_DIR}/lib/cmake/leptonica/LeptonicaTargets.cmake"
+    COMMAND ${CMAKE_SOURCE_DIR}/fix_leptonica_targets.sh ${STAGING_DIR}
     DEPENDEES install
 )
+
 
 ExternalProject_Add(tesseract
   PREFIX ${CMAKE_BINARY_DIR}/deps/tesseract         # Separate build directory
@@ -155,14 +158,11 @@ ExternalProject_Add(tesseract
     ${TOOLCHAIN_ARGS}
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${TESS_PREFIX}
-    -DCMAKE_PREFIX_PATH=${STAGING_DIR}
     -DLeptonica_DIR=${LEPT_PREFIX}/lib/cmake/leptonica
     -DBUILD_TESTS=OFF
     -DBUILD_TRAINING_TOOLS=OFF
-    -DPKG_CONFIG_PATH=${STAGING_DIR}/lib/pkgconfig
-    -DLeptonica_DIR=${STAGING_DIR}/lib/cmake/leptonica
-    -DCMAKE_PREFIX_PATH=${STAGING_DIR}
     -DCMAKE_FIND_ROOT_PATH=${STAGING_DIR}  # Para cross-compile
+    -DLEPT_TIFF_RESULT=0
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
