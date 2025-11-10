@@ -55,12 +55,10 @@ ExternalProject_Add(zlib
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-    -DBUILD_SHARED_LIBS=OFF
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
 
-# 2. libjpeg-turbo - JPEG support (8-bit)
 ExternalProject_Add(libjpeg
   PREFIX ${CMAKE_BINARY_DIR}/deps/libjpeg
   URL https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/${JPEG_VERSION}/libjpeg-turbo-${JPEG_VERSION}.tar.gz
@@ -70,8 +68,6 @@ ExternalProject_Add(libjpeg
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-    -DENABLE_SHARED=OFF
-    -DENABLE_STATIC=ON
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
@@ -86,9 +82,7 @@ ExternalProject_Add(libpng
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-    -DPNG_SHARED=OFF
-    -DPNG_STATIC=ON
-    -DPNG_TESTS=OFF
+    -DPNG_TESTS=ON
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
@@ -99,18 +93,14 @@ ExternalProject_Add(libtiff
   URL https://download.osgeo.org/libtiff/tiff-${TIFF_VERSION}.tar.gz
   DEPENDS zlib libjpeg
   # Patch to fix CMath::CMath target issue
-  PATCH_COMMAND ${CMAKE_SOURCE_DIR}/patch_libtiff.sh <SOURCE_DIR>
   CMAKE_ARGS
     ${TOOLCHAIN_ARGS}
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-    -DBUILD_SHARED_LIBS=OFF
-    -Dtiff-tools=OFF
-    -Dtiff-tests=OFF
-    -Dtiff-contrib=OFF
     -Dtiff-docs=OFF
-    -Djpeg12=OFF
+    -Dtiff-tests=OFF
+    -Dtif-static=OFF
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
@@ -125,15 +115,6 @@ ExternalProject_Add(libwebp
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-    -DWEBP_BUILD_ANIM_UTILS=OFF
-    -DWEBP_BUILD_CWEBP=OFF
-    -DWEBP_BUILD_DWEBP=OFF
-    -DWEBP_BUILD_GIF2WEBP=OFF
-    -DWEBP_BUILD_IMG2WEBP=OFF
-    -DWEBP_BUILD_VWEBP=OFF
-    -DWEBP_BUILD_WEBPINFO=OFF
-    -DWEBP_BUILD_WEBPMUX=OFF
-    -DWEBP_BUILD_EXTRAS=OFF
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
@@ -149,7 +130,6 @@ ExternalProject_Add(leptonica
   DEPENDS zlib libjpeg libpng libtiff libwebp
   UPDATE_COMMAND ""
   # Patch to use PRIVATE linkage and not export imported targets
-  PATCH_COMMAND ${CMAKE_SOURCE_DIR}/patch_leptonica.sh <SOURCE_DIR>
   CMAKE_ARGS
     ${TOOLCHAIN_ARGS}
     -DCMAKE_BUILD_TYPE=Release
@@ -158,20 +138,7 @@ ExternalProject_Add(leptonica
     -DCMAKE_INCLUDE_PATH=${STAGING_DIR}/include
     -DCMAKE_LIBRARY_PATH=${STAGING_DIR}/lib
     -DBUILD_PROG=OFF
-    -DBUILD_SHARED_LIBS=OFF
     -DSW_BUILD=OFF
-    -DZLIB_LIBRARY=${STAGING_DIR}/lib/libz.a
-    -DZLIB_INCLUDE_DIR=${STAGING_DIR}/include
-    -DPNG_LIBRARY=${STAGING_DIR}/lib/libpng.a
-    -DPNG_PNG_INCLUDE_DIR=${STAGING_DIR}/include
-    -DJPEG_LIBRARY=${STAGING_DIR}/lib/libjpeg.a
-    -DJPEG_INCLUDE_DIR=${STAGING_DIR}/include
-    -DTIFF_INCLUDE_DIR=${STAGING_DIR}/include
-    -DWebP_INCLUDE_DIR=${STAGING_DIR}/include
-    -DWebP_LIBRARY=${STAGING_DIR}/lib/libwebp.a
-    -DWebP_MUX_INCLUDE_DIR=${STAGING_DIR}/include
-    -DWebP_DEMUX_INCLUDE_DIR=${STAGING_DIR}/include
-    -DOPENJPEG_SUPPORT=OFF
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )

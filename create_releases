@@ -3,7 +3,7 @@
 set -eu -o pipefail
 
 # Pin buildenv container version
-BUILDENV_VERSION=0.0.4
+BUILDENV_VERSION=0.0.5
 
 # ccache directory for shared compilation cache across builds
 CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}"
@@ -29,17 +29,6 @@ function build_for_target {
   # This is especially important when working with mount points
   mkdir -p "$BUILD_OUTPUT_DIR/$TARGET"
 
-  # For linux-amd64 (native build), don't set BUILD_TARGET to avoid
-  # cross-compilation detection. The buildenv entrypoint will use native
-  # build mode without toolchain file, allowing try_run() tests to work.
-  #
-  # For other targets (linux-aarch64, windows-amd64), set BUILD_TARGET
-  # to enable proper cross-compilation with toolchain files.
-  local build_target_env=""
-  if [ "$TARGET" != "linux-amd64" ]; then
-    build_target_env="-e BUILD_TARGET=$TARGET"
-  fi
-
   # The buildenv entrypoint automatically:
   # 1. Selects the correct toolchain based on BUILD_TARGET (if set)
   # 2. Configures with cmake -B /out -G Ninja
@@ -57,7 +46,7 @@ function build_for_target {
     -v "$CCACHE_DIR":/ccache \
     -e TESSERACT_VERSION="$VERSION" \
     -e CCACHE_DIR=/ccache \
-    $build_target_env \
+    -e BUILD_TARGET="$TARGET" \
     ghcr.io/actions-precompiled/buildenv:$BUILDENV_VERSION
 }
 
