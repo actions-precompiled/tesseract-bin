@@ -3,7 +3,7 @@
 set -eu -o pipefail
 
 # Pin buildenv container version
-BUILDENV_VERSION=0.0.5
+BUILDENV_VERSION=0.0.8
 
 # ccache directory for shared compilation cache across builds
 CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}"

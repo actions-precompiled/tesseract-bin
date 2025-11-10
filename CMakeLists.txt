@@ -2,6 +2,17 @@ cmake_minimum_required(VERSION 3.25)
 project(tesseract-prebuilt LANGUAGES C CXX)
 include(ExternalProject)
 
+set(STAGING_DIR "${CMAKE_BINARY_DIR}/staging/${TARGET_NAME}")
+file(MAKE_DIRECTORY "${STAGING_DIR}")
+
+set(CMAKE_SYSROOT ${STAGING_DIR})
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SYSROOT}/cmake")
+set(CMAKE_PREFIX_PATH ${CMAKE_SYSROOT})
+
+find_package(CMath)
+
 # set(TESSERACT_VERSION "5.5.1")
 # Accept TESSERACT_VERSION from environment variable or CMake -D flag
 if(NOT DEFINED TESSERACT_VERSION)
@@ -22,14 +33,12 @@ set(PNG_VERSION "1.6.44")
 set(TIFF_VERSION "4.7.0")
 set(WEBP_VERSION "1.4.0")
 
-set(CMAKE_PREFIX_PATH ${STAGING_DIR})
+# set(CMAKE_PREFIX_PATH ${STAGING_DIR})
 set(TARGET_NAME "tesseract-${TESSERACT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
 message(STATUS "Target: ${TARGET_NAME}")
 message(STATUS "System: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "Processor: ${CMAKE_SYSTEM_PROCESSOR}")
 
-set(STAGING_DIR ${CMAKE_BINARY_DIR}/staging/${TARGET_NAME})
-file(MAKE_DIRECTORY ${STAGING_DIR})
 
 set(LEPT_PREFIX ${STAGING_DIR})
 set(TESS_PREFIX ${STAGING_DIR})
@@ -39,25 +48,16 @@ set(TOOLCHAIN_ARGS "")
 if(CMAKE_TOOLCHAIN_FILE)
   list(APPEND TOOLCHAIN_ARGS
     -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
-    -DBUILD_SHARED_LIBS=OFF
-    -DZLIB_LIBRARY=${STAGING_DIR}/lib/libzlibstatic.a
-    -DZLIB_INCLUDE_DIR=${STAGING_DIR}/include
-    -DTIFF_INCLUDE_DIR=${STAGING_DIR}/include
-    -DTIFF_LIBRARY=${STAGING_DIR}/lib/libtiff.a
-    -DSW_BUILD=OFF
+
   )
   message(STATUS "Using toolchain: ${CMAKE_TOOLCHAIN_FILE}")
 endif()
-
-set(CMAKE_FIND_ROOT_PATH ${STAGING_DIR})
-set(CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH OFF)
-set(CMAKE_FIND_USE_CMAKE_PATH OFF)
-set(CMAKE_FIND_USE_CMAKE_SYSTEM_PATH OFF)
-
-if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -L/usr/x86_64-w64-mingw32/lib")
-endif()
-
+list(APPEND TOOLCHAIN_ARGS
+    -DCMAKE_SYSROOT=${STAGING_DIR}
+    -DBUILD_SHARED_LIBS=OFF
+    -DCMAKE_MODULE_PATH=${CMAKE_MODULE_PATH}:${CMAKE_CURRENT_SOURCE_DIR}/cmake
+    -DSW_BUILD=OFF
+)
 
 
 # ============================================================================
@@ -79,14 +79,6 @@ ExternalProject_Add(zlib
   USES_TERMINAL_BUILD 1
   USES_TERMINAL_INSTALL 1
 )
-
-add_custom_command(
-  TARGET zlib POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy
-          ${STAGING_DIR}/lib/libzlibstatic.a
-          ${STAGING_DIR}/lib/libz.a
-)
-
 
 ExternalProject_Add(libjpeg
   PREFIX ${CMAKE_BINARY_DIR}/deps/libjpeg
@@ -114,7 +106,6 @@ ExternalProject_Add(libpng
     -DCMAKE_INSTALL_PREFIX=${STAGING_DIR}
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
     -DPNG_TESTS=OFF
-    -DZLIB_ROOT=${STAGING_DIR}
   CMAKE_CACHE_ARGS
     ${COMMON_CACHE_ARGS}
   USES_TERMINAL_BUILD 1
@@ -186,7 +177,6 @@ ExternalProject_Add_Step(leptonica fix_cmake_config
     COMMAND ${CMAKE_SOURCE_DIR}/fix_leptonica_targets.sh ${STAGING_DIR}
     DEPENDEES install
 )
-
 
 ExternalProject_Add(tesseract
   PREFIX ${CMAKE_BINARY_DIR}/deps/tesseract         # Separate build directory
