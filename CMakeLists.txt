@@ -23,13 +23,10 @@ FetchContent_MakeAvailable(vcpkg)
 # Bootstrap vcpkg se necessário
 if(NOT EXISTS ${vcpkg_SOURCE_DIR}/vcpkg)
   message(STATUS "Bootstrapping vcpkg...")
-  if(WIN32)
-    execute_process(COMMAND ${vcpkg_SOURCE_DIR}/bootstrap-vcpkg.bat -disableMetrics
-                    WORKING_DIRECTORY ${vcpkg_SOURCE_DIR})
-  else()
-    execute_process(COMMAND ${vcpkg_SOURCE_DIR}/bootstrap-vcpkg.sh -disableMetrics
-                    WORKING_DIRECTORY ${vcpkg_SOURCE_DIR})
-  endif()
+  execute_process(
+    COMMAND ${vcpkg_SOURCE_DIR}/bootstrap-vcpkg.sh -disableMetrics
+    WORKING_DIRECTORY ${vcpkg_SOURCE_DIR}
+  )
 endif()
 
 set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE ${CMAKE_TOOLCHAIN_FILE})
@@ -64,9 +61,15 @@ message(STATUS "Installing to: ${STAGING_DIR}")
 # Instala tesseract via vcpkg
 message(STATUS "Installing tesseract via vcpkg...")
 execute_process(
-  COMMAND ${vcpkg_SOURCE_DIR}/vcpkg install tesseract:${VCPKG_TARGET_TRIPLET}
+  COMMAND
+    ${vcpkg_SOURCE_DIR}/vcpkg
+    install
+    tesseract:${VCPKG_TARGET_TRIPLET}
+    --debug
+    --clean-after-build
   WORKING_DIRECTORY ${vcpkg_SOURCE_DIR}
   RESULT_VARIABLE VCPKG_RESULT
+  COMMAND_ECHO STDERR
 )
 
 if(NOT VCPKG_RESULT EQUAL 0)
