@@ -30,11 +30,16 @@ if(NOT EXISTS ${vcpkg_SOURCE_DIR}/vcpkg)
 endif()
 
 set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE ${CMAKE_TOOLCHAIN_FILE})
+set(VCPKG_BUILD_TYPE release)
+
 set(CMAKE_TOOLCHAIN_FILE ${vcpkg_SOURCE_DIR}/scripts/buildsystems/vcpkg.cmake CACHE STRING "" FORCE)
 
 project(tesseract-prebuilt LANGUAGES C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  set(CMAKE_C_COMPILER ${TOOLCHAIN_PREFIX}-gcc-posix)
+  set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PREFIX}-g++-posix)
+  set(VCPKG_CXX_FLAGS -pthread -include "<mutex>" ${VCPKG_CXX_FLAGS})
   set(VCPKG_TARGET_TRIPLET "x64-mingw-static")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
@@ -49,6 +54,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(VCPKG_TARGET_TRIPLET "x64-osx-release")
   endif()
 endif()
+
 
 message(STATUS "VCPKG_TARGET_TRIPLET: ${VCPKG_TARGET_TRIPLET}")
 
