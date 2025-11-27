@@ -36,6 +36,9 @@ set(CMAKE_TOOLCHAIN_FILE ${vcpkg_SOURCE_DIR}/scripts/buildsystems/vcpkg.cmake CA
 
 project(tesseract-prebuilt LANGUAGES C CXX)
 
+message(STATUS "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
+message(STATUS "CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(CMAKE_C_COMPILER ${TOOLCHAIN_PREFIX}-gcc-posix)
   set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PREFIX}-g++-posix)
@@ -64,6 +67,9 @@ set(STAGING_DIR "${CMAKE_BINARY_DIR}/staging/${TARGET_NAME}")
 message(STATUS "Target: ${TARGET_NAME}")
 message(STATUS "Installing to: ${STAGING_DIR}")
 
+# Copia triplets para o diretório de build para garantir acesso e evitar problemas com mounts read-only
+file(COPY ${CMAKE_SOURCE_DIR}/triplets DESTINATION ${CMAKE_BINARY_DIR})
+
 # Instala tesseract via vcpkg
 message(STATUS "Installing tesseract via vcpkg...")
 execute_process(
@@ -71,7 +77,7 @@ execute_process(
     ${vcpkg_SOURCE_DIR}/vcpkg
     install
     tesseract:${VCPKG_TARGET_TRIPLET}
-    --overlay-triplets=${CMAKE_SOURCE_DIR}/triplets
+    --overlay-triplets=${CMAKE_BINARY_DIR}/triplets
     --debug
     --clean-after-build
   WORKING_DIRECTORY ${vcpkg_SOURCE_DIR}
