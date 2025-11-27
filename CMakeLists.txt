@@ -36,22 +36,25 @@ set(CMAKE_TOOLCHAIN_FILE ${vcpkg_SOURCE_DIR}/scripts/buildsystems/vcpkg.cmake CA
 
 project(tesseract-prebuilt LANGUAGES C CXX)
 
+message(STATUS "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
+message(STATUS "CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(CMAKE_C_COMPILER ${TOOLCHAIN_PREFIX}-gcc-posix)
   set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PREFIX}-g++-posix)
   set(VCPKG_CXX_FLAGS -pthread -include "<mutex>" ${VCPKG_CXX_FLAGS})
-  set(VCPKG_TARGET_TRIPLET "x64-mingw-dynamic")
+  set(VCPKG_TARGET_TRIPLET "x64-mingw-static")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
-    set(VCPKG_TARGET_TRIPLET "x64-linux-release")
+    set(VCPKG_TARGET_TRIPLET "x64-linux-static")
   elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
-    set(VCPKG_TARGET_TRIPLET "arm64-linux-release")
+    set(VCPKG_TARGET_TRIPLET "arm64-linux-static")
   endif()
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
-    set(VCPKG_TARGET_TRIPLET "arm64-osx-release")
+    set(VCPKG_TARGET_TRIPLET "arm64-osx-static")
   else()
-    set(VCPKG_TARGET_TRIPLET "x64-osx-release")
+    set(VCPKG_TARGET_TRIPLET "x64-osx-static")
   endif()
 endif()
 
@@ -64,6 +67,9 @@ set(STAGING_DIR "${CMAKE_BINARY_DIR}/staging/${TARGET_NAME}")
 message(STATUS "Target: ${TARGET_NAME}")
 message(STATUS "Installing to: ${STAGING_DIR}")
 
+# Copia triplets para o diretório de build para garantir acesso e evitar problemas com mounts read-only
+file(COPY ${CMAKE_SOURCE_DIR}/triplets DESTINATION ${CMAKE_BINARY_DIR})
+
 # Instala tesseract via vcpkg
 message(STATUS "Installing tesseract via vcpkg...")
 execute_process(
@@ -71,6 +77,7 @@ execute_process(
     ${vcpkg_SOURCE_DIR}/vcpkg
     install
     tesseract:${VCPKG_TARGET_TRIPLET}
+    --overlay-triplets=${CMAKE_BINARY_DIR}/triplets
     --debug
     --clean-after-build
   WORKING_DIRECTORY ${vcpkg_SOURCE_DIR}
@@ -89,12 +96,6 @@ find_program(TESSERACT_EXE tesseract REQUIRED)
 # Copia binários e dependências para staging
 file(MAKE_DIRECTORY ${STAGING_DIR}/bin)
 file(COPY ${TESSERACT_EXE} DESTINATION ${STAGING_DIR}/bin)
-
-# Copia tessdata se existir
-set(VCPKG_INSTALLED ${vcpkg_SOURCE_DIR}/installed/${VCPKG_TARGET_TRIPLET})
-if(EXISTS ${VCPKG_INSTALLED}/share/tessdata)
-  file(COPY ${VCPKG_INSTALLED}/share/tessdata DESTINATION ${STAGING_DIR}/share)
-endif()
 
 # Target para empacotar
 add_custom_target(package-zip ALL

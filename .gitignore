@@ -2,3 +2,4 @@ build
 target
 released_versions.txt
 upstream_versions.txt
+.ccache
