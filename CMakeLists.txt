@@ -1,61 +1,106 @@
 cmake_minimum_required(VERSION 3.25)
-project(tesseract-prebuilt LANGUAGES C CXX)
-include(ExternalProject)
 
-# set(TESSERACT_VERSION "5.5.1")
+# Accept TESSERACT_VERSION from environment variable or CMake -D flag
 if(NOT DEFINED TESSERACT_VERSION)
-  message(FATAL_ERROR "TESSERACT_VERSION precisa ser definida, ex: 5.5.1")
+  if(DEFINED ENV{TESSERACT_VERSION})
+    set(TESSERACT_VERSION $ENV{TESSERACT_VERSION})
+    message(STATUS "Using TESSERACT_VERSION from environment: ${TESSERACT_VERSION}")
+  else()
+    message(FATAL_ERROR "TESSERACT_VERSION must be defined via -DTESSERACT_VERSION=... or environment variable")
+  endif()
 endif()
 
-set(LEPTONICA_VERSION "1.86.0")
+
+# Baixa vcpkg
+include(FetchContent)
+FetchContent_Declare(vcpkg
+  GIT_REPOSITORY https://github.com/microsoft/vcpkg.git
+  GIT_TAG master
+  GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(vcpkg)
+
+# Bootstrap vcpkg se necessário
+if(NOT EXISTS ${vcpkg_SOURCE_DIR}/vcpkg)
+  message(STATUS "Bootstrapping vcpkg...")
+  execute_process(
+    COMMAND ${vcpkg_SOURCE_DIR}/bootstrap-vcpkg.sh -disableMetrics
+    WORKING_DIRECTORY ${vcpkg_SOURCE_DIR}
+  )
+endif()
+
+set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE ${CMAKE_TOOLCHAIN_FILE})
+set(VCPKG_BUILD_TYPE release)
+
+set(CMAKE_TOOLCHAIN_FILE ${vcpkg_SOURCE_DIR}/scripts/buildsystems/vcpkg.cmake CACHE STRING "" FORCE)
+
+project(tesseract-prebuilt LANGUAGES C CXX)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  set(CMAKE_C_COMPILER ${TOOLCHAIN_PREFIX}-gcc-posix)
+  set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PREFIX}-g++-posix)
+  set(VCPKG_CXX_FLAGS -pthread -include "<mutex>" ${VCPKG_CXX_FLAGS})
+  set(VCPKG_TARGET_TRIPLET "x64-mingw-dynamic")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+    set(VCPKG_TARGET_TRIPLET "x64-linux-release")
+  elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+    set(VCPKG_TARGET_TRIPLET "arm64-linux-release")
+  endif()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+    set(VCPKG_TARGET_TRIPLET "arm64-osx-release")
+  else()
+    set(VCPKG_TARGET_TRIPLET "x64-osx-release")
+  endif()
+endif()
+
+
+message(STATUS "VCPKG_TARGET_TRIPLET: ${VCPKG_TARGET_TRIPLET}")
 
 set(TARGET_NAME "tesseract-${TESSERACT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+set(STAGING_DIR "${CMAKE_BINARY_DIR}/staging/${TARGET_NAME}")
+
 message(STATUS "Target: ${TARGET_NAME}")
+message(STATUS "Installing to: ${STAGING_DIR}")
 
-set(STAGING_DIR ${CMAKE_BINARY_DIR}/staging/${TARGET_NAME})
-file(MAKE_DIRECTORY ${STAGING_DIR})
-
-set(LEPT_PREFIX ${STAGING_DIR})
-set(TESS_PREFIX ${STAGING_DIR})
-
-ExternalProject_Add(leptonica
-  PREFIX ${CMAKE_BINARY_DIR}/deps/leptonica         # build separado
-  GIT_REPOSITORY https://github.com/DanBloomberg/leptonica.git
-  GIT_TAG ${LEPTONICA_VERSION}
-  CMAKE_ARGS
-    -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_INSTALL_PREFIX=${LEPT_PREFIX}
-    -DBUILD_PROG=OFF
-  USES_TERMINAL_BUILD 1
-  USES_TERMINAL_INSTALL 1
+# Instala tesseract via vcpkg
+message(STATUS "Installing tesseract via vcpkg...")
+execute_process(
+  COMMAND
+    ${vcpkg_SOURCE_DIR}/vcpkg
+    install
+    tesseract:${VCPKG_TARGET_TRIPLET}
+    --debug
+    --clean-after-build
+  WORKING_DIRECTORY ${vcpkg_SOURCE_DIR}
+  RESULT_VARIABLE VCPKG_RESULT
+  COMMAND_ECHO STDERR
 )
 
-ExternalProject_Add(tesseract
-  PREFIX ${CMAKE_BINARY_DIR}/deps/tesseract         # build separado
-  GIT_REPOSITORY https://github.com/tesseract-ocr/tesseract.git
-  GIT_TAG ${TESSERACT_VERSION}
-  DEPENDS leptonica
-  CMAKE_ARGS
-    -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_INSTALL_PREFIX=${TESS_PREFIX}
-    -DLeptonica_DIR=${LEPT_PREFIX}/lib/cmake/leptonica
-    -DBUILD_TESTS=OFF
-    -DBUILD_TRAINING_TOOLS=OFF
-  USES_TERMINAL_BUILD 1
-  USES_TERMINAL_INSTALL 1
+if(NOT VCPKG_RESULT EQUAL 0)
+  message(FATAL_ERROR "vcpkg install failed")
+endif()
+
+# Encontra tesseract instalado
+find_package(Tesseract CONFIG REQUIRED)
+find_program(TESSERACT_EXE tesseract REQUIRED)
+
+# Copia binários e dependências para staging
+file(MAKE_DIRECTORY ${STAGING_DIR}/bin)
+file(COPY ${TESSERACT_EXE} DESTINATION ${STAGING_DIR}/bin)
+
+# Copia tessdata se existir
+set(VCPKG_INSTALLED ${vcpkg_SOURCE_DIR}/installed/${VCPKG_TARGET_TRIPLET})
+if(EXISTS ${VCPKG_INSTALLED}/share/tessdata)
+  file(COPY ${VCPKG_INSTALLED}/share/tessdata DESTINATION ${STAGING_DIR}/share)
+endif()
+
+# Target para empacotar
+add_custom_target(package-zip ALL
+  COMMAND ${CMAKE_COMMAND} -E tar cfv ${CMAKE_BINARY_DIR}/${TARGET_NAME}.zip --format=zip .
+  WORKING_DIRECTORY ${STAGING_DIR}
+  COMMENT "Creating ${TARGET_NAME}.zip"
 )
 
-add_custom_target(stage-all
-  DEPENDS leptonica tesseract
-  COMMENT "Staging Leptonica and Tesseract builds under ${STAGING_DIR}"
-)
-
-add_custom_target(package-zip
-  DEPENDS stage-all
-  COMMAND ${CMAKE_COMMAND} -E tar "cfv"
-          ${CMAKE_BINARY_DIR}/${TARGET_NAME}.zip
-          --format=zip
-          ${STAGING_DIR}
-  WORKING_DIRECTORY ${STAGING_DIR}/..
-  COMMENT "Packing ${STAGING_DIR} into zip"
-)
+message(STATUS "Build complete. Run 'cmake --build . --target package-zip' to create zip")

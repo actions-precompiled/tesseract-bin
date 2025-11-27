@@ -1,0 +1,61 @@
+name: PR Build Test
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get latest Tesseract version
+        id: get-version
+        run: |
+          # Get the latest release tag from tesseract-ocr/tesseract
+          LATEST_VERSION=$(curl -s https://api.github.com/repos/tesseract-ocr/tesseract/releases/latest | jq -r .tag_name)
+          echo "Latest Tesseract version: $LATEST_VERSION"
+          echo "version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build for all targets
+        env:
+          LOCAL_BUILD: 1
+          VERSION: ${{ steps.get-version.outputs.version }}
+        run: |
+          # Use env var to prevent code injection
+          ./create_releases "$VERSION"
+
+      - name: Upload linux-amd64 artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tesseract-${{ steps.get-version.outputs.version }}-linux-amd64
+          path: target/linux-amd64/*.zip
+          if-no-files-found: warn
+
+      - name: Upload linux-aarch64 artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tesseract-${{ steps.get-version.outputs.version }}-linux-aarch64
+          path: target/linux-aarch64/*.zip
+          if-no-files-found: warn
+
+      - name: Upload windows-amd64 artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tesseract-${{ steps.get-version.outputs.version }}-windows-amd64
+          path: target/windows-amd64/*.zip
+          if-no-files-found: warn
+
+      - name: List build artifacts
+        if: always()
+        run: |
+          echo "=== Build artifacts ==="
+          find target -name "*.zip" -type f -exec ls -lh {} \;

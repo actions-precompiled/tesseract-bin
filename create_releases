@@ -2,40 +2,122 @@
 
 set -eu -o pipefail
 
-BUILD_IMAGE_VERSION=0.0.2
+# Pin buildenv container version
+BUILDENV_VERSION=0.0.10
 
+# ccache directory for shared compilation cache across builds
+CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}"
+mkdir -p "$CCACHE_DIR"
+
+# Three supported cross-compilation targets
+TARGETS=(
+  "windows-amd64"
+  "linux-amd64"
+  "linux-aarch64"
+)
+
+# Allow overriding build output directory (useful for mount point issues)
+BUILD_OUTPUT_DIR="${BUILD_OUTPUT_DIR:-$PWD/target}"
+
+function build_for_target {
+  VERSION="$1"; shift
+  TARGET="$1"; shift
+
+  echo "Building $VERSION for target: $TARGET" >&2
+
+  # Create target directory before docker run to avoid permission issues
+  # This is especially important when working with mount points
+  mkdir -p "$BUILD_OUTPUT_DIR/$TARGET"
+
+  # The buildenv entrypoint automatically:
+  # 1. Selects the correct toolchain based on BUILD_TARGET (if set)
+  # 2. Configures with cmake -B /out -G Ninja
+  # 3. Builds with cmake --build /out
+  # 4. Packages with the package-zip target
+  #
+  # Run as current user to avoid git "dubious ownership" errors
+  # when building on mounted volumes with different ownership
+  # Mount ccache directory to speed up subsequent builds
+  docker run \
+    --rm \
+    --user "$(id -u):$(id -g)" \
+    -v "$PWD":/src:ro \
+    -v "$BUILD_OUTPUT_DIR/$TARGET":/out \
+    -v "$CCACHE_DIR":/ccache \
+    -e TESSERACT_VERSION="$VERSION" \
+    -e CCACHE_DIR=/ccache \
+    -e CMAKE_C_COMPILER_LAUNCHER=ccache \
+    -e CMAKE_CXX_COMPILER_LAUNCHER=ccache \
+    -e BUILD_TARGET="$TARGET" \
+    ghcr.io/actions-precompiled/buildenv:$BUILDENV_VERSION
+}
 
 function build_release {
   VERSION="$1"; shift
 
-  docker run \
-    -ti \
-    -v "$PWD":/src:ro \
-    -v "$PWD"/target/linux-amd64:/out \
-    -e TESSERACT_VERSION="$VERSION"  \
-    ghcr.io/actions-precompiled/buildenv--builder-linux-amd64:$BUILD_IMAGE_VERSION \
-    bash -c 'cmake -B /out -G Ninja -DTESSERACT_VERSION="$TESSERACT_VERSION"  && cmake --build /out --target package-zip'
+  # Build for all three targets
+  for target in "${TARGETS[@]}"; do
+    build_for_target "$VERSION" "$target"
+  done
 
-  echo "" | gh release create "$VERSION" --target empty || true # if it exists no problem, I D E M P O T E N C Y
-  gh release upload "$VERSION" --clobber ./target/linux-amd64/*.zip
+  # Skip release creation and upload if LOCAL_BUILD is set
+  if [[ -v LOCAL_BUILD ]]; then
+    echo "LOCAL_BUILD is set, skipping release creation and upload" >&2
+    return 0
+  fi
+
+  # Create release (idempotent)
+  echo "" | gh release create "$VERSION" --target empty || true
+
+  # Upload all three target artifacts
+  for target in "${TARGETS[@]}"; do
+    if [ -d "$BUILD_OUTPUT_DIR/$target" ]; then
+      gh release upload "$VERSION" --clobber "$BUILD_OUTPUT_DIR/$target"/*.zip
+    fi
+  done
 }
 
 # shellcheck disable=SC2206
 versions_to_build=($*)
 
 if [ "${#versions_to_build[@]}" -eq 0 ]; then
-  gh release list --repo tesseract-ocr/tesseract --json tagName | jq .[].tagName -r > upstream_versions.txt
-  gh release list --json tagName | jq '.[].tagName' -r > released_versions.txt
+  echo "Fetching upstream versions from tesseract-ocr/tesseract..." >&2
+  if ! gh release list --repo tesseract-ocr/tesseract --json tagName | jq -r '.[].tagName' > upstream_versions.txt; then
+    echo "Error: Failed to fetch upstream versions" >&2
+    exit 1
+  fi
 
+  echo "Fetching existing releases from this repository..." >&2
+  if ! gh release list --json tagName | jq -r '.[].tagName' > released_versions.txt; then
+    echo "Error: Failed to fetch existing releases" >&2
+    exit 1
+  fi
+
+  upstream_count=$(wc -l < upstream_versions.txt | tr -d ' ')
+  released_count=$(wc -l < released_versions.txt | tr -d ' ')
+
+  echo "Found $upstream_count upstream versions and $released_count already released" >&2
+
+  # Find versions that are in upstream but not in released
+  # Using comm for reliable comparison (requires sorted input)
+  sort upstream_versions.txt > upstream_sorted.txt
+  sort released_versions.txt > released_sorted.txt
+
+  # comm -23: lines only in file 1 (upstream but not released)
   # shellcheck disable=SC2207
-  versions_to_build=($(diff -w upstream_versions.txt released_versions.txt | grep -e '^< ' | sed 's;^< ;;'))
+  versions_to_build=($(comm -23 upstream_sorted.txt released_sorted.txt))
+
+  rm -f upstream_sorted.txt released_sorted.txt
 fi
 
-# shellcheck disable=SC2145
-echo "Versions to be build: "
-for version in "${versions_to_build[@]}"; do
-  printf "\tVersion: %s\n" "$version"
-done
+if [ "${#versions_to_build[@]}" -eq 0 ]; then
+  echo "No new versions to build!" >&2
+else
+  echo "Versions to be built: ${#versions_to_build[@]}" >&2
+  for version in "${versions_to_build[@]}"; do
+    echo "  - $version" >&2
+  done
+fi
 
 if [[ -v DRY_RUN ]]; then
   exit 0
