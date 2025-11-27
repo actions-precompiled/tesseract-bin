@@ -67,7 +67,7 @@ function build_release {
   fi
 
   # Create release (idempotent)
-  echo "" | gh release create "$VERSION" --target empty || true
+  echo "" | gh release create "$VERSION" --target blank || true
 
   # Upload all three target artifacts
   for target in "${TARGETS[@]}"; do
