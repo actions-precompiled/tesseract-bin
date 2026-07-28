@@ -124,7 +124,7 @@ Two workflows:
 | Workflow | Trigger | What |
 |----------|---------|------|
 | **Build** (`build.yml`) | **push** / PR → latest tag; **`workflow_dispatch`** → one version | Arch matrix (`linux-amd64`, `linux-aarch64`); upload workflow artifacts; optional **GitHub Release** if `publish=true` |
-| **Dispatch Missing** (`dispatch-missing.yml`) | **`workflow_dispatch` only** | Computes missing upstream releases (or takes a list) and **dispatches one Build run per version** |
+| **Dispatch Missing** (`dispatch-missing.yml`) | **`workflow_dispatch` only** | Fan-out: `gh workflow run build.yml` **once per version** |
 
 ### Releases are mutable (re-issueable)
 
@@ -135,7 +135,14 @@ We do **not** rely on GitHub “Immutable releases”. Publishing is meant to be
 | `publish=true` | Create release if missing; `gh release upload --clobber` replaces same-named assets |
 | `publish=true` + `recreate=true` | `gh release delete … --yes --cleanup-tag`, then create + upload (clean re-issue) |
 
-On a bad release: either re-run **Build** with `publish` + `recreate`, or delete the release in the UI and run again with `publish`.
+**Dispatch version selection** (empty `versions` input):
+
+| `recreate` | Versions dispatched |
+|------------|---------------------|
+| `false` | only tags **not yet** released here |
+| `true` | **every** upstream tag (rebuild/re-publish all) |
+
+On a bad release: either re-run **Build** with `publish` + `recreate`, or run **Dispatch Missing** with `publish` + `recreate` (empty versions) to rebuild everything.
 
 Keep **Settings → General → Immutable releases** off for this repo if you want that workflow.
 
@@ -157,8 +164,11 @@ Actions → Build → version=5.5.3, publish=true
 # Fan-out missing (safe start: cap + no publish)
 Actions → Dispatch Missing → max=3, publish=false
 
-# Fill releases for missing (after you trust the build)
-Actions → Dispatch Missing → versions empty or "5.5.0 5.5.1 …", publish=true
+# Fill releases for missing only
+Actions → Dispatch Missing → versions empty, publish=true
+
+# Recreate ALL upstream tags (rebuild + re-publish)
+Actions → Dispatch Missing → versions empty, publish=true, recreate=true
 ```
 
 Download intermediate tarballs from each Build run’s **Artifacts**. Released assets (if publish) also appear under the repo **Releases** page.
