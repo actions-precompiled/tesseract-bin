@@ -126,6 +126,19 @@ Two workflows:
 | **Build** (`build.yml`) | **push** / PR → latest tag; **`workflow_dispatch`** → one version | Arch matrix (`linux-amd64`, `linux-aarch64`); upload workflow artifacts; optional **GitHub Release** if `publish=true` |
 | **Dispatch Missing** (`dispatch-missing.yml`) | **`workflow_dispatch` only** | Computes missing upstream releases (or takes a list) and **dispatches one Build run per version** |
 
+### Releases are mutable (re-issueable)
+
+We do **not** rely on GitHub “Immutable releases”. Publishing is meant to be fixable:
+
+| Mode | Behavior |
+|------|----------|
+| `publish=true` | Create release if missing; `gh release upload --clobber` replaces same-named assets |
+| `publish=true` + `recreate=true` | `gh release delete … --yes --cleanup-tag`, then create + upload (clean re-issue) |
+
+On a bad release: either re-run **Build** with `publish` + `recreate`, or delete the release in the UI and run again with `publish`.
+
+Keep **Settings → General → Immutable releases** off for this repo if you want that workflow.
+
 ### Failure isolation
 
 - Each version is its **own workflow run**. One bad version never cancels the others.

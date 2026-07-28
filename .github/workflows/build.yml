@@ -23,6 +23,11 @@ on:
         required: false
         type: boolean
         default: false
+      recreate:
+        description: 'If publish: delete existing release for this tag first, then create fresh (fix broken releases)'
+        required: false
+        type: boolean
+        default: false
 
 # Isolate concurrent runs by version (dispatch) or by ref (push/PR).
 concurrency:
@@ -38,6 +43,7 @@ jobs:
     outputs:
       version: ${{ steps.plan.outputs.version }}
       publish: ${{ steps.plan.outputs.publish }}
+      recreate: ${{ steps.plan.outputs.recreate }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -49,6 +55,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           INPUT_VERSION: ${{ github.event.inputs.version }}
           INPUT_PUBLISH: ${{ github.event.inputs.publish }}
+          INPUT_RECREATE: ${{ github.event.inputs.recreate }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           python3 <<'PY'
@@ -60,7 +67,9 @@ jobs:
           event = os.environ.get("EVENT_NAME", "")
           raw = (os.environ.get("INPUT_VERSION") or "").strip()
           publish_raw = (os.environ.get("INPUT_PUBLISH") or "false").lower()
+          recreate_raw = (os.environ.get("INPUT_RECREATE") or "false").lower()
           publish = event == "workflow_dispatch" and publish_raw in ("true", "1", "yes")
+          recreate = publish and recreate_raw in ("true", "1", "yes")
 
           if raw:
               version = raw
@@ -76,14 +85,16 @@ jobs:
               )
               version = latest["tag_name"]
 
-          print(f"version={version} publish={publish} event={event}")
+          print(f"version={version} publish={publish} recreate={recreate} event={event}")
           with out.open("a", encoding="utf-8") as fh:
               fh.write(f"version={version}\n")
               fh.write(f"publish={'true' if publish else 'false'}\n")
+              fh.write(f"recreate={'true' if recreate else 'false'}\n")
           with summary.open("a", encoding="utf-8") as fh:
               fh.write("## Build plan\n\n")
               fh.write(f"- Version: `{version}`\n")
               fh.write(f"- Publish GitHub Release: **{'yes' if publish else 'no'}**\n")
+              fh.write(f"- Recreate (delete then create): **{'yes' if recreate else 'no'}**\n")
               fh.write(f"- Trigger: `{event}`\n")
           PY
 
@@ -166,16 +177,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.plan.outputs.version }}
+          RECREATE: ${{ needs.plan.outputs.recreate }}
         run: |
           python3 <<'PY'
           import os, subprocess, sys
           from pathlib import Path
 
           version = os.environ["VERSION"]
+          recreate = (os.environ.get("RECREATE") or "").lower() in ("true", "1", "yes")
           bare = version[1:] if version.startswith("v") else version
           root = Path("artifacts")
           tarballs = sorted(root.rglob("*.tar.gz"))
-          # Prefer names that match this version
           matched = [
               p for p in tarballs
               if bare in p.name or version in p.name
@@ -186,7 +198,7 @@ jobs:
                   print(" ", p, file=sys.stderr)
               sys.exit(1)
 
-          # Require both arches before releasing
+          # Require both arches before releasing — never ship a half release
           names = {p.name for p in matched}
           need = {
               f"tesseract-{bare}-linux-amd64.tar.gz",
@@ -208,6 +220,17 @@ jobs:
           Upstream: https://github.com/tesseract-ocr/tesseract
           Tessdata: https://github.com/tesseract-ocr/tessdata_fast
           """
+
+          # Mutable releases (not GitHub "Immutable releases"):
+          # - default: create if missing, then upload --clobber (replace assets)
+          # - recreate=true: delete release+tag assets first, then create clean
+          if recreate:
+              print(f"recreate=true — deleting existing release {version} if any", flush=True)
+              subprocess.run(
+                  ["gh", "release", "delete", version, "--yes", "--cleanup-tag"],
+                  check=False,
+              )
+
           create = subprocess.run(
               [
                   "gh", "release", "create", version,
@@ -218,15 +241,18 @@ jobs:
               check=False,
           )
           if create.returncode != 0:
-              print(f"release {version} may already exist; uploading assets", flush=True)
+              if recreate:
+                  print(f"release create failed for {version} after delete", file=sys.stderr)
+                  sys.exit(create.returncode or 1)
+              print(f"release {version} may already exist; uploading assets with --clobber", flush=True)
 
           for tarball in sorted(matched):
-              print("+", "gh release upload", version, tarball, flush=True)
+              print("+", "gh release upload", version, "--clobber", str(tarball), flush=True)
               subprocess.run(
                   ["gh", "release", "upload", version, "--clobber", str(tarball)],
                   check=True,
               )
-          print(f"✓ Released {version}", flush=True)
+          print(f"✓ Released {version} (recreate={recreate})", flush=True)
           PY
 
       - name: Summary

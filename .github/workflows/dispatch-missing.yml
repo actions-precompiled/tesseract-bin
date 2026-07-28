@@ -18,6 +18,11 @@ on:
         required: false
         type: boolean
         default: false
+      recreate:
+        description: 'If publish: delete existing release then create (pass recreate to Build)'
+        required: false
+        type: boolean
+        default: false
       max:
         description: 'Cap how many versions to dispatch (0 = no cap). Use for smoke (e.g. 3).'
         required: false
@@ -46,6 +51,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           INPUT_VERSIONS: ${{ inputs.versions }}
           INPUT_PUBLISH: ${{ inputs.publish }}
+          INPUT_RECREATE: ${{ inputs.recreate }}
           INPUT_MAX: ${{ inputs.max }}
         run: |
           python3 <<'PY'
@@ -55,6 +61,9 @@ jobs:
           summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
           raw = (os.environ.get("INPUT_VERSIONS") or "").strip()
           publish = (os.environ.get("INPUT_PUBLISH") or "false").lower() in (
+              "true", "1", "yes",
+          )
+          recreate = (os.environ.get("INPUT_RECREATE") or "false").lower() in (
               "true", "1", "yes",
           )
           try:
@@ -82,6 +91,7 @@ jobs:
               "## Dispatch plan\n",
               f"- Count: **{len(versions)}**\n",
               f"- Publish each: **{publish}**\n",
+              f"- Recreate each: **{recreate}**\n",
               f"- Max cap: `{max_n or 'none'}`\n\n",
           ]
           if not versions:
@@ -94,7 +104,7 @@ jobs:
               lines.append(f"- `{v}`\n")
           summary.write_text("".join(lines), encoding="utf-8")
 
-          print(f"Dispatching {len(versions)} Build run(s), publish={publish}")
+          print(f"Dispatching {len(versions)} Build run(s), publish={publish}, recreate={recreate}")
           failed = []
           for i, version in enumerate(versions):
               cmd = [
@@ -102,6 +112,7 @@ jobs:
                   "--ref", os.environ.get("GITHUB_REF_NAME") or "main",
                   "-f", f"version={version}",
                   "-f", f"publish={'true' if publish else 'false'}",
+                  "-f", f"recreate={'true' if recreate else 'false'}",
               ]
               print("+", " ".join(cmd), flush=True)
               proc = subprocess.run(cmd, check=False)
