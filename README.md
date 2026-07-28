@@ -1,174 +1,150 @@
-# Tesseract Prebuilt Binaries
+# Tesseract prebuilt binaries
 
-Cross-platform prebuilt binaries for Tesseract OCR, built using the [buildenv](https://github.com/actions-precompiled/buildenv) container.
+Relocatable [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) builds for
+Linux, published as tarballs you can unpack and use with [mise](https://mise.jdx.dev/),
+asdf, or a plain `PATH` entry.
 
-## Supported Platforms
+Each package includes the `tesseract` binary, bundled shared libraries, and
+**tessdata** (`eng` + `osd` from [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast)
+by default) so OCR works out of the box.
 
-- **linux-amd64** - Linux x86_64 (native compilation)
-- **linux-aarch64** - Linux ARM64 (cross-compilation)
-- **windows-amd64** - Windows x86_64 (MinGW-w64 cross-compilation)
+## Why not `buildenv`?
 
-## Building Releases
+The generic [buildenv](https://github.com/actions-precompiled/buildenv) image is
+aimed at small C/C++ cross builds. Here we want a native multi-arch Docker image,
+a relocatable layout with tessdata, and the same orchestration shape as the other
+actions-precompiled packages (Docker + `create_releases`, no Dagger).
+
+## Supported targets
+
+| Target | Builder | Notes |
+|--------|---------|--------|
+| `linux-amd64` | `ubuntu-latest` | Native build on Ubuntu 24.04 |
+| `linux-aarch64` | `ubuntu-24.04-arm` | Native build (no QEMU) |
+
+Windows is **in scope later**, not in this first turn.
+
+Native builds only. GitHub’s free arm64 runners are for **public** repos; private
+repos need paid arm runners or self-hosted.
+
+## Artifact layout
+
+```text
+tesseract-5.5.3-linux-amd64.tar.gz
+└── tesseract/
+    ├── bin/
+    │   ├── tesseract       (wrapper: lib path + TESSDATA_PREFIX)
+    │   └── tesseract.bin
+    ├── lib/                (bundled leptonica + image stack)
+    ├── share/tessdata/     (eng.traineddata, osd.traineddata, …)
+    └── BUILDINFO.txt
+```
+
+Install example:
+
+```bash
+mkdir -p ~/.local/tesseract
+tar -xzf tesseract-5.5.3-linux-amd64.tar.gz -C ~/.local/tesseract --strip-components=1
+export PATH="$HOME/.local/tesseract/bin:$PATH"
+tesseract --version
+tesseract --list-langs
+```
+
+The wrapper sets `TESSDATA_PREFIX` to the packaged `share/tessdata` unless you
+already exported one (so you can drop in more languages).
+
+## Building
 
 ### Prerequisites
 
 - Docker
-- GitHub CLI (`gh`)
-- Access to push releases to this repository
+- Network (clones upstream + pulls base image + tessdata)
+- GitHub CLI (`gh`) only if you use `--publish`
 
-### Build Script
+### Commands
 
-The `create_releases` script builds Tesseract binaries for all supported platforms and publishes them as GitHub releases.
-
-**Build specific version:**
 ```bash
-./create_releases 5.5.1
-```
+# Build one version locally (default — no GitHub release)
+./create_releases 5.5.3
 
-**Build multiple versions:**
-```bash
-./create_releases 5.5.0 5.5.1 5.6.0
-```
-
-**Auto-detect versions to build:**
-```bash
-# Builds all versions from tesseract-ocr/tesseract that don't have releases here yet
+# Auto-detect upstream releases not published here yet, still local-only
 ./create_releases
+
+# See what would be built
+./create_releases --dry-run
+# or: DRY_RUN=1 ./create_releases
+
+# Explicit target(s)
+TARGETS=linux-amd64 ./create_releases 5.5.3
+TARGETS="linux-amd64 linux-aarch64" ./create_releases 5.5.3
+
+# Extra languages (space-separated) or full tessdata_fast tree
+TESSDATA_LANGS="eng por spa" ./create_releases 5.5.3
+TESSDATA_LANGS=all ./create_releases 5.5.3
+
+# Optional: also create a GitHub Release (usually not used — prefer CI artifacts)
+./create_releases --publish 5.5.3
 ```
 
-**Dry run (see what would be built without building):**
-```bash
-DRY_RUN=1 ./create_releases
-```
+`create_releases` is a uv script (`#!/usr/bin/env -S uv run --script`, stdlib deps only).
+Install tools with `mise install` (see `mise.toml`). Default `TARGETS` matches the
+host (`linux-amd64` or `linux-aarch64`). **Publish is off by default** so local
+builds are safe.
 
-**Local build (build without creating releases or uploading):**
-```bash
-LOCAL_BUILD=1 ./create_releases 5.5.1
-```
+| Flag / env | Meaning |
+|------------|---------|
+| `--publish` / `PUBLISH=1` | Create GitHub releases and upload tarballs |
+| `--dry-run` / `DRY_RUN=1` | List versions, do not build |
+| `--skip-smoke` / `SKIP_SMOKE=1` | Skip post-build smoke test |
+| `--smoke-only` | Only smoke-test existing `target/` tarballs (no build) |
+| `TARGETS` | Space-separated targets (default: host arch) |
+| `BUILD_OUTPUT_DIR` | Output root (default `$PWD/target`) |
+| `SKIP_IMAGE_BUILD` | Reuse an already-built `tesseract-buildenv:local` |
+| `IMAGE_NAME` / `IMAGE_TAG` | Override image name |
+| `LEPTONICA_VERSION` | Pin leptonica (default `1.85.0`) |
+| `TESSDATA_LANGS` | Languages to ship (`eng osd` default; `all` = full tessdata_fast) |
+| `TESSDATA_REPO` | Git URL for tessdata_fast (or compatible tree) |
 
-### Build Process
+Smoke tests extract the tarball and run `tesseract --version` / `--list-langs`.
+CI uploads the tarball first, then runs smoke.
 
-For each version, the script:
-1. Builds Tesseract + Leptonica for all three targets using the buildenv container
-2. Creates a GitHub release (if it doesn't exist)
-3. Uploads the ZIP artifacts for each platform to the release
+### What the container does
 
-### Output Structure
+1. Clones [DanBloomberg/leptonica](https://github.com/DanBloomberg/leptonica) at the pinned tag  
+2. Clones [tesseract-ocr/tesseract](https://github.com/tesseract-ocr/tesseract) at the requested tag  
+3. Builds both with CMake/Ninja and installs into a staging prefix  
+4. Bundles shared libraries under `lib/` and writes a relocatable `bin/tesseract` wrapper  
+5. Downloads tessdata into `share/tessdata/`  
+6. Emits `tesseract-<version>-linux-amd64.tar.gz` under `target/<target>/`
 
-Build artifacts are placed in `target/` by default (or `$BUILD_OUTPUT_DIR` if set):
-```
-target/
-├── linux-amd64/
-│   └── tesseract-5.5.1-Linux-x86_64.zip
-├── linux-aarch64/
-│   └── tesseract-5.5.1-Linux-aarch64.zip
-└── windows-amd64/
-    └── tesseract-5.5.1-Windows-AMD64.zip
-```
+## CI
 
-**Note:** The script automatically creates target directories before running Docker to avoid permission issues with mount points.
+| Workflow | Trigger | What |
+|----------|---------|------|
+| `build-artifacts.yml` | **push** / PR to main | Dry-run plan + smoke-build latest for `linux-amd64` and `linux-aarch64`; upload **workflow artifacts** |
+| `build-releases.yml` | **`workflow_dispatch` only** | Build one or more versions (or auto-detect missing) for both arches; upload **workflow artifacts** |
 
-## Continuous Integration
+This repo does **not** create GitHub Releases. Download tarballs from the Actions run:
+**Actions → select run → Artifacts**.
 
-### PR Build Testing
+No schedule cron. Orchestration is `create_releases` (uv script, stdlib + `curl`/`docker`):
+HTTPS via **curl** (system CA store), then it puppets `docker`.
 
-A GitHub Actions workflow runs on every pull request to validate that builds work correctly:
+## Versioning
 
-- **Workflow**: `.github/workflows/pr-build-test.yml`
-- **Trigger**: Pull requests to main/master
-- **Action**: Builds the latest Tesseract version for all three targets
-- **Artifacts**: Uploads build outputs as workflow artifacts (not as releases)
+Release tags track **upstream** release tags (`5.5.3`, `5.5.2`, …). The tarball
+name uses the bare version (`tesseract-5.5.3-linux-amd64.tar.gz`).
 
-The workflow uses `LOCAL_BUILD=1` to skip release creation and upload, ensuring PR builds don't pollute the releases.
+## Notes / limitations
 
-### Automated Release Publishing
+- glibc is from Ubuntu 24.04 — older distros may not run the binary.
+- Image codecs still rely on libraries bundled from the builder (png/jpeg/tiff/webp/…).
+- Default tessdata is **fast** models for `eng` and `osd` only; set `TESSDATA_LANGS`
+  or drop more `*.traineddata` into `share/tessdata`.
+- Windows packaging is deferred.
 
-A scheduled workflow automatically builds and publishes new Tesseract releases:
+## License
 
-- **Workflow**: `.github/workflows/build-releases.yml`
-- **Triggers**:
-  - **Schedule**: Every Saturday at 2:00 AM UTC (automatic)
-  - **Manual**: Via workflow_dispatch in GitHub Actions UI
-- **Action**:
-  - Detects new Tesseract versions from upstream (tesseract-ocr/tesseract)
-  - Builds missing versions for all three targets
-  - Creates GitHub releases with the compiled artifacts
-- **Permissions**: Requires `contents: write` to create releases and upload assets
-
-This workflow runs the `create_releases` script without `LOCAL_BUILD`, so it creates actual releases and uploads artifacts to GitHub.
-
-## Configuration
-
-### Container Version
-
-The buildenv container version is pinned at the top of `create_releases`:
-
-```bash
-BUILDENV_VERSION=0.0.1
-```
-
-To use a newer version, update this constant.
-
-### Leptonica Version
-
-Leptonica version is configured in `CMakeLists.txt`:
-
-```cmake
-set(LEPTONICA_VERSION "1.86.0")
-```
-
-### Environment Variables
-
-The `create_releases` script supports the following environment variables:
-
-- **`DRY_RUN`**: If set, lists versions that would be built without actually building
-- **`LOCAL_BUILD`**: If set, builds locally without creating GitHub releases or uploading artifacts
-  - Useful for testing builds locally
-  - Used automatically by the PR build workflow
-- **`BUILD_OUTPUT_DIR`**: Override the build output directory (default: `$PWD/target`)
-  - Useful when working with mount points that have permission restrictions
-  - Example: `BUILD_OUTPUT_DIR=/tmp/tesseract-builds ./create_releases 5.5.1`
-
-## How It Works
-
-### Self-Contained Binaries
-
-This project builds **fully self-contained Tesseract binaries** that don't depend on system libraries. Users can extract and run immediately without installing dependencies.
-
-### Build Process
-
-1. **Cross-Compilation Container**: Uses `ghcr.io/actions-precompiled/buildenv` which provides:
-   - GCC toolchains for all platforms
-   - CMake toolchain files for cross-compilation
-   - Minimal base system (no image libraries needed)
-
-2. **CMake ExternalProject Pipeline**: Builds everything from source:
-   ```
-   zlib → libjpeg-turbo → libpng → libtiff → libwebp
-                                      ↓
-                                  Leptonica → Tesseract
-   ```
-
-   All libraries are built **statically** and linked into the final binaries:
-   - **zlib** (1.3.1) - Compression support
-   - **libjpeg-turbo** (3.0.4) - JPEG image support
-   - **libpng** (1.6.44) - PNG image support
-   - **libtiff** (4.7.0) - TIFF image support
-   - **libwebp** (1.4.0) - WebP image support
-   - **Leptonica** (1.86.0) - Image processing library
-   - **Tesseract** (user-specified) - OCR engine
-
-3. **Toolchain Propagation**: The toolchain file is automatically passed to all ExternalProject builds, ensuring every dependency is built for the correct target platform.
-
-4. **Static Linking**: All dependencies use `BUILD_SHARED_LIBS=OFF` or equivalent, creating binaries with no external library dependencies (except libc).
-
-## CMake Details
-
-The project automatically detects the target platform from the toolchain:
-- `CMAKE_SYSTEM_NAME` - e.g., "Linux" or "Windows"
-- `CMAKE_SYSTEM_PROCESSOR` - e.g., "x86_64", "aarch64", or "AMD64"
-
-Output naming follows the pattern:
-```
-tesseract-{VERSION}-{SYSTEM_NAME}-{PROCESSOR}.zip
-```
+Upstream tesseract is Apache-2.0. Tessdata has its own terms. This packaging glue
+is provided under the same terms as other actions-precompiled repos unless noted
+otherwise.

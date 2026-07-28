@@ -1,129 +1,547 @@
-#!/usr/bin/env bash
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""Orchestrate tesseract prebuilds. Python 3 stdlib only (puppet for docker/gh)."""
 
-set -eu -o pipefail
+from __future__ import annotations
 
-# Pin buildenv container version
-BUILDENV_VERSION=0.0.10
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+from pathlib import Path
 
-# ccache directory for shared compilation cache across builds
-CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}"
-mkdir -p "$CCACHE_DIR"
+ROOT = Path(__file__).resolve().parent
+IMAGE_NAME = os.environ.get("IMAGE_NAME", "tesseract-buildenv")
+IMAGE_TAG = os.environ.get("IMAGE_TAG", "local")
+UPSTREAM_API = os.environ.get("UPSTREAM_REPO_API", "tesseract-ocr/tesseract")
+DEFAULT_TARGETS = ("linux-amd64", "linux-aarch64")
 
-# Three supported cross-compilation targets
-TARGETS=(
-  "windows-amd64"
-  "linux-amd64"
-  "linux-aarch64"
-)
 
-# Allow overriding build output directory (useful for mount point issues)
-BUILD_OUTPUT_DIR="${BUILD_OUTPUT_DIR:-$PWD/target}"
+def eprint(*args: object) -> None:
+    print(*args, file=sys.stderr)
 
-function build_for_target {
-  VERSION="$1"; shift
-  TARGET="$1"; shift
 
-  echo "Building $VERSION for target: $TARGET" >&2
+def env_flag(name: str) -> bool:
+    return name in os.environ and os.environ[name] not in ("", "0", "false", "False")
 
-  # Create target directory before docker run to avoid permission issues
-  # This is especially important when working with mount points
-  mkdir -p "$BUILD_OUTPUT_DIR/$TARGET"
 
-  # The buildenv entrypoint automatically:
-  # 1. Selects the correct toolchain based on BUILD_TARGET (if set)
-  # 2. Configures with cmake -B /out -G Ninja
-  # 3. Builds with cmake --build /out
-  # 4. Packages with the package-zip target
-  #
-  # Run as current user to avoid git "dubious ownership" errors
-  # when building on mounted volumes with different ownership
-  # Mount ccache directory to speed up subsequent builds
-  docker run \
-    --rm \
-    --user "$(id -u):$(id -g)" \
-    -v "$PWD":/src:ro \
-    -v "$BUILD_OUTPUT_DIR/$TARGET":/out \
-    -v "$CCACHE_DIR":/ccache \
-    -e TESSERACT_VERSION="$VERSION" \
-    -e CCACHE_DIR=/ccache \
-    -e CMAKE_C_COMPILER_LAUNCHER=ccache \
-    -e CMAKE_CXX_COMPILER_LAUNCHER=ccache \
-    -e BUILD_TARGET="$TARGET" \
-    ghcr.io/actions-precompiled/buildenv:$BUILDENV_VERSION
-}
+def targets_from_env() -> list[str]:
+    raw = os.environ.get("TARGETS", "").strip()
+    if not raw:
+        machine = os.uname().machine
+        if machine in ("aarch64", "arm64"):
+            return ["linux-aarch64"]
+        return ["linux-amd64"]
+    return raw.split()
 
-function build_release {
-  VERSION="$1"; shift
 
-  # Build for all three targets
-  for target in "${TARGETS[@]}"; do
-    build_for_target "$VERSION" "$target"
-  done
+def build_output_dir() -> Path:
+    return Path(os.environ.get("BUILD_OUTPUT_DIR", ROOT / "target")).resolve()
 
-  # Skip release creation and upload if LOCAL_BUILD is set
-  if [[ -v LOCAL_BUILD ]]; then
-    echo "LOCAL_BUILD is set, skipping release creation and upload" >&2
+
+def run(cmd: list[str], *, check: bool = True, **kwargs) -> subprocess.CompletedProcess:
+    eprint("+", " ".join(cmd))
+    return subprocess.run(cmd, check=check, **kwargs)
+
+
+def version_bare(version: str) -> str:
+    return version[1:] if version.startswith("v") else version
+
+
+def find_tarballs(out_root: Path, version: str, target: str) -> list[Path]:
+    bare = version_bare(version)
+    d = out_root / target
+    if not d.is_dir():
+        return []
+    matches = sorted(d.glob(f"tesseract-{bare}-{target}.tar.gz"))
+    if matches:
+        return matches
+    return sorted(
+        p
+        for p in d.glob("*.tar.gz")
+        if bare in p.name or version in p.name
+    )
+
+
+def smoke_test_tarball(tarball: Path) -> None:
+    """Extract the package and verify the launcher runs (stdlib only)."""
+    eprint(f"\nSmoke test: {tarball.name}")
+    if not tarball.is_file():
+        raise FileNotFoundError(f"tarball missing: {tarball}")
+
+    with tempfile.TemporaryDirectory(prefix="tess-smoke-") as tmp:
+        tmp_path = Path(tmp)
+        with tarfile.open(tarball, "r:gz") as tf:
+            try:
+                tf.extractall(tmp_path, filter="data")
+            except TypeError:
+                tf.extractall(tmp_path)
+
+        roots = [p for p in tmp_path.iterdir() if p.is_dir()]
+        if len(roots) != 1:
+            raise RuntimeError(
+                f"expected one top-level dir in tarball, got: {[p.name for p in roots]}"
+            )
+        prefix = roots[0]
+        bin_dir = prefix / "bin"
+        launcher = bin_dir / "tesseract"
+        real_bin = bin_dir / "tesseract.bin"
+        lib_dir = prefix / "lib"
+        tessdata = prefix / "share" / "tessdata"
+        buildinfo = prefix / "BUILDINFO.txt"
+
+        required = {
+            "bin/tesseract": launcher,
+            "bin/tesseract.bin": real_bin,
+            "lib/": lib_dir,
+            "share/tessdata/": tessdata,
+            "BUILDINFO.txt": buildinfo,
+        }
+        missing = [name for name, path in required.items() if not path.exists()]
+        if missing:
+            raise RuntimeError(f"package missing paths: {missing}")
+
+        trained = list(tessdata.glob("*.traineddata"))
+        if not trained:
+            raise RuntimeError("share/tessdata has no *.traineddata files")
+
+        if not os.access(launcher, os.X_OK):
+            raise RuntimeError(f"launcher not executable: {launcher}")
+
+        eprint("--- BUILDINFO ---")
+        eprint(buildinfo.read_text(encoding="utf-8", errors="replace").rstrip())
+        eprint(f"tessdata files: {len(trained)} ({', '.join(p.name for p in sorted(trained)[:8])}…)"
+               if len(trained) > 8
+               else f"tessdata files: {', '.join(p.name for p in sorted(trained))}")
+
+        def is_loader_error(text: str) -> bool:
+            low = text.lower()
+            return any(
+                s in low
+                for s in (
+                    "error while loading shared libraries",
+                    "cannot open shared object",
+                    "cannot open shared object file",
+                )
+            )
+
+        for args in (["--version"], ["--list-langs"]):
+            cmd = [str(launcher), *args]
+            eprint("+", " ".join(cmd))
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            out = (proc.stdout or "") + (proc.stderr or "")
+            for line in out.splitlines()[:30]:
+                eprint(" ", line)
+
+            if is_loader_error(out):
+                raise RuntimeError(f"smoke failed for {args}: dynamic linker error")
+
+            if args == ["--version"]:
+                if "tesseract" not in out.lower() and proc.returncode != 0:
+                    raise RuntimeError(
+                        f"smoke failed for --version (exit {proc.returncode}): empty/bad output"
+                    )
+                if not out.strip():
+                    raise RuntimeError("smoke failed for --version: empty output")
+            elif args == ["--list-langs"]:
+                if proc.returncode != 0:
+                    raise RuntimeError(
+                        f"smoke failed for --list-langs (exit {proc.returncode})"
+                    )
+                if "eng" not in out and not any(p.stem == "eng" for p in trained):
+                    # eng might be omitted if TESSDATA_LANGS custom; require at least one lang line
+                    if "List of available languages" not in out and not trained:
+                        raise RuntimeError("smoke failed: no languages listed")
+
+        eprint(f"✓ Smoke test passed: {tarball.name}")
+
+
+def smoke_test_version(version: str, targets: list[str], out_root: Path) -> None:
+    if env_flag("SKIP_SMOKE"):
+        eprint("SKIP_SMOKE set — skipping smoke tests")
+        return
+    eprint("\n" + "=" * 40)
+    eprint(f"Smoke testing {version}")
+    eprint("=" * 40)
+    for target in targets:
+        tarballs = find_tarballs(out_root, version, target)
+        if not tarballs:
+            raise FileNotFoundError(
+                f"no tarball for {version} / {target} under {out_root / target}"
+            )
+        for tarball in tarballs:
+            smoke_test_tarball(tarball)
+
+
+def curl_json(url: str, *, headers: list[tuple[str, str]] | None = None) -> object:
+    """GET JSON via curl (system CA store; avoids broken Python SSL on NixOS)."""
+    if not shutil.which("curl"):
+        raise RuntimeError("curl is required for HTTPS fetches")
+
+    cmd = [
+        "curl",
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--location",
+        "--max-time",
+        "60",
+        "-H",
+        "Accept: application/vnd.github+json",
+        "-H",
+        "User-Agent: actions-precompiled-tesseract",
+        "-H",
+        "X-GitHub-Api-Version: 2022-11-28",
+    ]
+    for key, value in headers or []:
+        cmd.extend(["-H", f"{key}: {value}"])
+    cmd.append(url)
+
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "").strip()
+        raise RuntimeError(f"curl failed ({proc.returncode}) for {url}: {err}")
+    return json.loads(proc.stdout)
+
+
+def github_api_json(path: str) -> object:
+    """GET api.github.com path via curl. Uses GH_TOKEN / GITHUB_TOKEN if set."""
+    url = f"https://api.github.com{path}"
+    headers: list[tuple[str, str]] = []
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers.append(("Authorization", f"Bearer {token}"))
+    return curl_json(url, headers=headers)
+
+
+def list_upstream_tags() -> list[str]:
+    """Prefer GitHub releases (stable); fall back to tags."""
+    tags: list[str] = []
+    page = 1
+    while True:
+        data = github_api_json(
+            f"/repos/{UPSTREAM_API}/releases?per_page=100&page={page}"
+        )
+        if not isinstance(data, list) or not data:
+            break
+        for item in data:
+            if item.get("prerelease") or item.get("draft"):
+                continue
+            name = item.get("tag_name")
+            if name:
+                tags.append(name)
+        if len(data) < 100:
+            break
+        page += 1
+    if tags:
+        return tags
+
+    # Fallback: tags API
+    page = 1
+    while True:
+        data = github_api_json(f"/repos/{UPSTREAM_API}/tags?per_page=100&page={page}")
+        if not isinstance(data, list) or not data:
+            break
+        for item in data:
+            name = item.get("name")
+            if name:
+                tags.append(name)
+        if len(data) < 100:
+            break
+        page += 1
+    return tags
+
+
+def list_released_tags() -> list[str]:
+    """Tags already released on *this* repo (via gh if available, else GitHub API)."""
+    if shutil.which("gh"):
+        proc = run(
+            ["gh", "release", "list", "--json", "tagName", "--jq", ".[].tagName"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode == 0 and proc.stdout is not None:
+            return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    if not repo:
+        eprint("No gh and no GITHUB_REPOSITORY — treating released set as empty")
+        return []
+    tags: list[str] = []
+    page = 1
+    try:
+        while True:
+            data = github_api_json(
+                f"/repos/{repo}/releases?per_page=100&page={page}"
+            )
+            if not isinstance(data, list) or not data:
+                break
+            for item in data:
+                name = item.get("tag_name")
+                if name:
+                    tags.append(name)
+            if len(data) < 100:
+                break
+            page += 1
+    except RuntimeError as exc:
+        eprint(f"Warning: could not list releases ({exc}); assuming none")
+        return []
+    return tags
+
+
+def versions_to_build(cli_versions: list[str]) -> list[str]:
+    if cli_versions:
+        return cli_versions
+
+    eprint(f"Fetching upstream releases from {UPSTREAM_API}...")
+    upstream = set(list_upstream_tags())
+    eprint(f"  upstream: {len(upstream)}")
+
+    eprint("Fetching existing releases from this repository...")
+    released = set(list_released_tags())
+    eprint(f"  released: {len(released)}")
+
+    missing = sorted(upstream - released)
+    return missing
+
+
+def host_docker_arch() -> str:
+    machine = os.uname().machine
+    if machine in ("x86_64", "amd64"):
+        return "amd64"
+    if machine in ("aarch64", "arm64"):
+        return "arm64"
+    return machine
+
+
+def ensure_image() -> None:
+    if env_flag("SKIP_IMAGE_BUILD"):
+        eprint(f"SKIP_IMAGE_BUILD set — using existing {IMAGE_NAME}:{IMAGE_TAG}")
+        return
+    arch = host_docker_arch()
+    eprint(f"Building Docker image {IMAGE_NAME}:{IMAGE_TAG} (TARGETARCH={arch})...")
+    run(
+        [
+            "docker",
+            "build",
+            "--build-arg",
+            f"TARGETARCH={arch}",
+            "-t",
+            f"{IMAGE_NAME}:{IMAGE_TAG}",
+            str(ROOT),
+        ]
+    )
+
+
+def build_for_target(version: str, target: str, out_root: Path) -> Path:
+    eprint(f"\nBuilding {version} for {target}...")
+    out_dir = out_root / target
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    script = ROOT / "scripts" / "build_and_package.sh"
+    cmd = [
+        "docker",
+        "run",
+        "--rm",
+        "--user",
+        f"{os.getuid()}:{os.getgid()}",
+        "-v",
+        f"{out_dir}:/out",
+        "-v",
+        f"{script}:/usr/local/bin/build_and_package.sh:ro",
+        "-e",
+        f"TESSERACT_VERSION={version}",
+        "-e",
+        f"BUILD_TARGET={target}",
+        "-e",
+        "OUTPUT_DIR=/out",
+        "-e",
+        "HOME=/tmp",
+        "-e",
+        "XDG_CACHE_HOME=/tmp/.cache",
+        "-e",
+        "LANG=C.UTF-8",
+        "-e",
+        "LC_ALL=C.UTF-8",
+    ]
+    # Optional passthroughs
+    for key in ("LEPTONICA_VERSION", "TESSDATA_LANGS", "TESSDATA_REPO", "JOBS", "KEEP_SYMBOLS"):
+        if key in os.environ and os.environ[key] != "":
+            cmd.extend(["-e", f"{key}={os.environ[key]}"])
+    cmd.append(f"{IMAGE_NAME}:{IMAGE_TAG}")
+    run(cmd)
+    return out_dir
+
+
+def publish_release(version: str, targets: list[str], out_root: Path) -> None:
+    release_tag = version
+    eprint(f"Creating GitHub release {release_tag}...")
+    notes = f"""Prebuilt tesseract {release_tag} (relocatable tree + tessdata_fast eng/osd).
+
+Install: extract the tarball and put `bin/` on your PATH (mise/asdf/manual).
+
+Targets: {", ".join(targets)}
+
+Upstream: https://github.com/tesseract-ocr/tesseract
+Tessdata: https://github.com/tesseract-ocr/tessdata_fast
+"""
+    create = run(
+        [
+            "gh",
+            "release",
+            "create",
+            release_tag,
+            "--title",
+            f"tesseract {release_tag}",
+            "--notes",
+            notes,
+            "--latest=false",
+        ],
+        check=False,
+        input=b"",
+    )
+    if create.returncode not in (0,):
+        eprint("release create returned non-zero (may already exist); continuing upload")
+
+    eprint("Uploading artifacts...")
+    for target in targets:
+        tarballs = sorted((out_root / target).glob("*.tar.gz"))
+        for tarball in tarballs:
+            run(
+                [
+                    "gh",
+                    "release",
+                    "upload",
+                    release_tag,
+                    "--clobber",
+                    str(tarball),
+                ]
+            )
+    eprint(f"✓ Released {release_tag}")
+
+
+def build_release(
+    version: str,
+    targets: list[str],
+    out_root: Path,
+    *,
+    publish: bool,
+    do_smoke: bool,
+) -> None:
+    eprint("\n" + "=" * 40)
+    eprint(f"Building tesseract version {version}")
+    eprint("=" * 40)
+
+    for target in targets:
+        build_for_target(version, target, out_root)
+
+    eprint(f"\nBuilt artifacts for {version}:")
+    for target in targets:
+        d = out_root / target
+        if d.is_dir():
+            run(["ls", "-lh", str(d)], check=False)
+
+    if do_smoke:
+        smoke_test_version(version, targets, out_root)
+
+    if not publish:
+        eprint("Local build only — pass --publish to create a GitHub release")
+        return
+
+    publish_release(version, targets, out_root)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Build precompiled tesseract tarballs. "
+            "Local by default; use --publish to upload GitHub releases."
+        )
+    )
+    parser.add_argument(
+        "versions",
+        nargs="*",
+        help="Upstream tags to build (default: releases not yet published here)",
+    )
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="Create GitHub releases and upload tarballs (also: PUBLISH=1)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="List versions/targets and exit (also: DRY_RUN=1)",
+    )
+    parser.add_argument(
+        "--skip-smoke",
+        action="store_true",
+        help="Skip post-build smoke tests (also: SKIP_SMOKE=1)",
+    )
+    parser.add_argument(
+        "--smoke-only",
+        action="store_true",
+        help="Only smoke-test existing tarballs under target/ (no docker build)",
+    )
+    args = parser.parse_args(argv)
+    if args.skip_smoke:
+        os.environ["SKIP_SMOKE"] = "1"
+
+    targets = targets_from_env()
+    versions = versions_to_build(args.versions)
+    out_root = build_output_dir()
+    publish = args.publish or env_flag("PUBLISH")
+    do_smoke = not (args.skip_smoke or env_flag("SKIP_SMOKE"))
+
+    if not versions:
+        eprint("No versions to build.")
+        return 0
+
+    eprint(f"\nVersions to build ({len(versions)}):")
+    for v in versions:
+        eprint(f"  - {v}  [targets: {' '.join(targets)}]")
+    eprint(f"Publish: {'yes' if publish else 'no (local only)'}")
+    eprint(
+        f"Smoke: {'yes' if do_smoke and not args.smoke_only else ('only' if args.smoke_only else 'no')}"
+    )
+
+    if args.dry_run or env_flag("DRY_RUN"):
+        eprint("Dry-run — exiting without building")
+        return 0
+
+    if args.smoke_only:
+        for version in versions:
+            smoke_test_version(version, targets, out_root)
+        eprint("\n✓ Smoke-only finished")
+        return 0
+
+    ensure_image()
+
+    for version in versions:
+        build_release(
+            version,
+            targets,
+            out_root,
+            publish=publish,
+            do_smoke=do_smoke,
+        )
+
+    eprint("\n✓ All requested builds finished")
     return 0
-  fi
 
-  # Create release (idempotent)
-  echo "" | gh release create "$VERSION" --target empty || true
 
-  # Upload all three target artifacts
-  for target in "${TARGETS[@]}"; do
-    if [ -d "$BUILD_OUTPUT_DIR/$target" ]; then
-      gh release upload "$VERSION" --clobber "$BUILD_OUTPUT_DIR/$target"/*.zip
-    fi
-  done
-}
-
-# shellcheck disable=SC2206
-versions_to_build=($*)
-
-if [ "${#versions_to_build[@]}" -eq 0 ]; then
-  echo "Fetching upstream versions from tesseract-ocr/tesseract..." >&2
-  if ! gh release list --repo tesseract-ocr/tesseract --json tagName | jq -r '.[].tagName' > upstream_versions.txt; then
-    echo "Error: Failed to fetch upstream versions" >&2
-    exit 1
-  fi
-
-  echo "Fetching existing releases from this repository..." >&2
-  if ! gh release list --json tagName | jq -r '.[].tagName' > released_versions.txt; then
-    echo "Error: Failed to fetch existing releases" >&2
-    exit 1
-  fi
-
-  upstream_count=$(wc -l < upstream_versions.txt | tr -d ' ')
-  released_count=$(wc -l < released_versions.txt | tr -d ' ')
-
-  echo "Found $upstream_count upstream versions and $released_count already released" >&2
-
-  # Find versions that are in upstream but not in released
-  # Using comm for reliable comparison (requires sorted input)
-  sort upstream_versions.txt > upstream_sorted.txt
-  sort released_versions.txt > released_sorted.txt
-
-  # comm -23: lines only in file 1 (upstream but not released)
-  # shellcheck disable=SC2207
-  versions_to_build=($(comm -23 upstream_sorted.txt released_sorted.txt))
-
-  rm -f upstream_sorted.txt released_sorted.txt
-fi
-
-if [ "${#versions_to_build[@]}" -eq 0 ]; then
-  echo "No new versions to build!" >&2
-else
-  echo "Versions to be built: ${#versions_to_build[@]}" >&2
-  for version in "${versions_to_build[@]}"; do
-    echo "  - $version" >&2
-  done
-fi
-
-if [[ -v DRY_RUN ]]; then
-  exit 0
-fi
-
-for version in "${versions_to_build[@]}"; do
-  echo Building version "$version" >&2
-  build_release "$version"
-done
+if __name__ == "__main__":
+    sys.exit(main())
