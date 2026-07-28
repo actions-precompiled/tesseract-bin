@@ -119,16 +119,38 @@ CI uploads the tarball first, then runs smoke.
 
 ## CI
 
+Two workflows:
+
 | Workflow | Trigger | What |
 |----------|---------|------|
-| `build-artifacts.yml` | **push** / PR to main | Dry-run plan + smoke-build latest for `linux-amd64` and `linux-aarch64`; upload **workflow artifacts** |
-| `build-releases.yml` | **`workflow_dispatch` only** | Build one or more versions (or auto-detect missing) for both arches; upload **workflow artifacts** |
+| **Build** (`build.yml`) | **push** / PR → latest tag; **`workflow_dispatch`** → one version | Arch matrix (`linux-amd64`, `linux-aarch64`); upload workflow artifacts; optional **GitHub Release** if `publish=true` |
+| **Dispatch Missing** (`dispatch-missing.yml`) | **`workflow_dispatch` only** | Computes missing upstream releases (or takes a list) and **dispatches one Build run per version** |
 
-This repo does **not** create GitHub Releases. Download tarballs from the Actions run:
-**Actions → select run → Artifacts**.
+### Failure isolation
 
-No schedule cron. Orchestration is `create_releases` (uv script, stdlib + `curl`/`docker`):
-HTTPS via **curl** (system CA store), then it puppets `docker`.
+- Each version is its **own workflow run**. One bad version never cancels the others.
+- Inside a Build run, arches use `fail-fast: false`.
+- Release (when enabled) only runs if **both** arches succeeded and both tarballs are present — no half releases.
+
+### Typical flows
+
+```text
+# Smoke / PR / push
+push → Build(latest) → artifacts only
+
+# One version, maybe release
+Actions → Build → version=5.5.3, publish=true
+
+# Fan-out missing (safe start: cap + no publish)
+Actions → Dispatch Missing → max=3, publish=false
+
+# Fill releases for missing (after you trust the build)
+Actions → Dispatch Missing → versions empty or "5.5.0 5.5.1 …", publish=true
+```
+
+Download intermediate tarballs from each Build run’s **Artifacts**. Released assets (if publish) also appear under the repo **Releases** page.
+
+Orchestration is `create_releases` (uv script, stdlib + `curl`/`docker`/`gh`).
 
 ## Versioning
 
