@@ -13,7 +13,7 @@ by default) so OCR works out of the box.
 The generic [buildenv](https://github.com/actions-precompiled/buildenv) image is
 aimed at small C/C++ cross builds. Here we want a native multi-arch Docker image,
 a relocatable layout with tessdata, and the same orchestration shape as the other
-actions-precompiled packages (Docker + `create_releases`, no Dagger).
+actions-precompiled packages (Docker + `create_releases`).
 
 ## Supported targets
 
